@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>소싱 대시보드</title>
+    <title>소싱 협업 대시보드 (실시간)</title>
     
     <script>
         window.process = { env: { NODE_ENV: 'production' } };
@@ -32,7 +32,7 @@
         .sidebar-transition { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
-<body class="bg-gray-50 text-slate-800 font-sans">
+<body class="bg-gray-50 text-slate-800 font-sans font-medium">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -85,13 +85,16 @@
             Download: (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></IconBase>,
             Clock: (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>,
             LinkIcon: (props) => <IconBase {...props}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>,
+            Flag: (props) => <IconBase {...props}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></IconBase>,
+            ChevronUp: (props) => <IconBase {...props}><polyline points="18 15 12 9 6 15"/></IconBase>,
+            ChevronDown: (props) => <IconBase {...props}><polyline points="6 9 12 15 18 9"/></IconBase>,
         };
 
         const { 
             Package, Search, Check, X, Minus, ShoppingBag, Calculator, 
             ImageIcon, Trash2, Plus, Settings, Edit2, 
             StickyNote, ChevronRight, LayoutDashboard, CheckCircle, 
-            ZoomIn, Cloud, RefreshCw, Truck, Clipboard, Menu, Download, Clock, LinkIcon
+            ZoomIn, Cloud, RefreshCw, Truck, Clipboard, Menu, Download, Clock, LinkIcon, Flag, ChevronUp, ChevronDown
         } = Icons;
 
         // --- 하위 컴포넌트 ---
@@ -114,13 +117,13 @@
             const krw = cny ? Math.round(cny * exchangeRate) : 0;
 
             return (
-                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 overflow-hidden text-slate-800">
+                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 overflow-hidden text-slate-800 shadow-sm">
                     <div className="flex items-center gap-2 mb-2 text-indigo-800 font-bold text-xs uppercase whitespace-nowrap">
                         <Calculator className="w-3 h-3" />
                         <span>실시간 환율 계산기</span>
                     </div>
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-indigo-600 mb-1 whitespace-nowrap font-medium">
+                    <div className="space-y-2 font-bold font-mono">
+                        <div className="flex items-center justify-between text-xs text-indigo-600 mb-1 whitespace-nowrap font-sans">
                             <span>적용 환율:</span>
                             <input 
                                 type="number" 
@@ -129,13 +132,13 @@
                                 className="w-16 text-right bg-white border border-indigo-200 rounded px-1 py-0.5 shadow-sm"
                             />
                         </div>
-                        <div className="flex items-center gap-2 font-medium font-mono text-xs">
-                            <input type="number" placeholder="위안" value={cny} onChange={(e) => setCny(e.target.value)} className="w-full text-sm p-2 rounded border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <span>위안(CNY)</span>
+                        <div className="flex items-center gap-2 text-xs">
+                            <input type="number" placeholder="위안" value={cny} onChange={(e) => setCny(e.target.value)} className="w-full text-sm p-2 rounded border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold" />
+                            <span className="font-sans font-bold">위안</span>
                         </div>
-                        <div className="flex items-center gap-2 font-medium font-mono text-xs">
+                        <div className="flex items-center gap-2 text-xs">
                             <div className="w-full text-sm p-2 rounded bg-white border border-indigo-200 font-bold text-gray-700 text-right shadow-sm">{krw.toLocaleString()}</div>
-                            <span>원(KRW)</span>
+                            <span className="font-sans font-bold">원</span>
                         </div>
                     </div>
                 </div>
@@ -146,8 +149,14 @@
             const [user, setUser] = useState(null);
             const [authError, setAuthError] = useState(null);
             const [activeTab, setActiveTab] = useState("전체");
+            const [activeProject, setActiveProject] = useState("전체");
             const [products, setProducts] = useState([]);
-            const [settings, setSettings] = useState({ categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩", "비치타올"], teamMembers: [{key: 'ceo', label: '사장님'}], exchangeRate: 195 });
+            const [settings, setSettings] = useState({ 
+                categories: ["기본 카테고리"], 
+                projects: ["기본 시즌"],
+                teamMembers: [{key: 'ceo', label: '사장님'}], 
+                exchangeRate: 195 
+            });
             const [searchTerm, setSearchTerm] = useState("");
             const [filterStatus, setFilterStatus] = useState("unconfirmed"); 
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -159,10 +168,9 @@
             const [memoTarget, setMemoTarget] = useState({ id: null, content: '', category: null });
             const [previewImage, setPreviewImage] = useState(null);
 
-            const [productForm, setProductForm] = useState({ category: '', name: '', option: '', cost: '', price: '', link: '', naverLink: '', image: null, optionImage: null, cny: '' });
-            const [lastTargetZone, setLastTargetZone] = useState('main'); // 'main' or 'option'
+            const [productForm, setProductForm] = useState({ project: '', category: '', name: '', option: '', cost: '', price: '', link: '', naverLink: '', image: null, optionImage: null, cny: '' });
+            const [lastTargetZone, setLastTargetZone] = useState('main');
 
-            // 1. Silent Auth initialization
             useEffect(() => {
                 const initAuthWithRetry = async (retryCount = 0) => {
                     try {
@@ -170,14 +178,13 @@
                         setUser(result.user);
                         setAuthError(null);
                     } catch (e) {
-                        console.error(`인증 실패 (시도 ${retryCount + 1}):`, e);
+                        console.error(`인증 실패:`, e);
                         if (e.code === 'auth/network-request-failed' && retryCount < 5) {
-                            const delay = Math.pow(2, retryCount) * 1000;
-                            setTimeout(() => initAuthWithRetry(retryCount + 1), delay);
+                            setTimeout(() => initAuthWithRetry(retryCount + 1), 1000);
                         } else if (e.code === 'auth/configuration-not-found') {
-                            setAuthError("Firebase 설정 오류: 익명 로그인을 활성화해야 합니다.");
+                            setAuthError("파이어베이스 설정 오류: 익명 로그인을 활성화해주세요.");
                         } else {
-                            setAuthError(`인증 실패: ${e.message}`);
+                            setAuthError(`인증 에러: ${e.message}`);
                         }
                     }
                 };
@@ -186,7 +193,6 @@
                 return () => unsubscribe();
             }, []);
 
-            // 2. Data Subscriptions
             useEffect(() => {
                 if (!user) return;
 
@@ -194,25 +200,20 @@
                 const unsubProds = onSnapshot(prodRef, (snapshot) => {
                     const list = snapshot.docs.map(doc => ({ ...doc.data(), firebaseId: doc.id }));
                     setProducts(list);
-                }, (err) => console.error("데이터 수신 오류:", err));
+                });
 
                 const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
                 const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
                     if (snapshot.exists()) {
                         setSettings(snapshot.data());
                     } else {
-                        setDoc(settingsRef, { 
-                            categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩", "비치타올"], 
-                            teamMembers: [{key: 'ceo', label: '사장님'}], 
-                            exchangeRate: 195 
-                        });
+                        setDoc(settingsRef, settings);
                     }
-                }, (err) => console.error("설정 수신 오류:", err));
+                });
 
                 return () => { unsubProds(); unsubSettings(); };
             }, [user]);
 
-            // 3. Paste Image Event
             useEffect(() => {
                 const handlePaste = (e) => {
                     if (!isAddModalOpen) return;
@@ -239,6 +240,7 @@
 
             const filteredProducts = useMemo(() => {
                 let list = products;
+                if (activeProject !== "전체") list = list.filter(p => p.project === activeProject);
                 if (activeTab !== "전체") list = list.filter(p => p.category === activeTab);
                 if (searchTerm) {
                     const term = searchTerm.toLowerCase();
@@ -251,22 +253,22 @@
                 else if (filterStatus === 'sample_ordered') list = list.filter(p => p.isSampleOrdered);
                 
                 return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            }, [products, activeTab, searchTerm, filterStatus]);
+            }, [products, activeProject, activeTab, searchTerm, filterStatus]);
 
             const activeCategoryCounts = useMemo(() => {
                 const counts = {};
                 products.forEach(p => {
-                    if (!p.isConfirmed && !p.isHeld) {
+                    const isSameProject = activeProject === "전체" || p.project === activeProject;
+                    if (isSameProject && !p.isConfirmed && !p.isHeld) {
                         counts[p.category] = (counts[p.category] || 0) + 1;
                     }
                 });
                 return counts;
-            }, [products]);
+            }, [products, activeProject]);
 
-            // --- Handlers ---
             const handleAddOrUpdateProduct = async (e) => {
                 e.preventDefault();
-                if (!user) { alert("로그인 연결 중입니다. 잠시 후 다시 시도하세요."); return; }
+                if (!user) return;
                 try {
                     const payload = {
                         ...productForm,
@@ -289,19 +291,19 @@
                     }
                     setIsAddModalOpen(false);
                 } catch (err) {
-                    alert("저장 중 오류 발생: " + err.message);
+                    alert("저장 실패: " + err.message);
                 }
             };
 
             const handleExportCSV = () => {
                 if (filteredProducts.length === 0) return;
-                const headers = ["번호", "카테고리", "상태", "상품명", "옵션", "원가", "판매가", "마진", "마진율", "1688링크", "타사링크", "메모"].join(",");
+                const headers = ["번호", "시즌", "카테고리", "상태", "상품명", "옵션", "원가", "판매가", "마진", "마진율", "소싱주소", "타사주소", "메모"].join(",");
                 const rows = filteredProducts.map((p, idx) => {
                     const margin = (p.price || 0) - (p.cost || 0);
                     const marginRate = p.price ? ((margin / p.price) * 100).toFixed(1) + "%" : "0%";
                     let st = p.isConfirmed ? "확정" : (p.isHeld ? "보류" : "진행중");
                     return [
-                        idx + 1, p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`,
+                        idx + 1, p.project || "미지정", p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`,
                         `"${(p.option || "").replace(/"/g, '""')}"`, p.cost, p.price, margin, marginRate,
                         p.link || "", p.naverLink || "", `"${(p.memo || "").replace(/"/g, '""')}"`
                     ].join(",");
@@ -309,24 +311,16 @@
                 const csvContent = "\uFEFF" + [headers, ...rows].join("\n");
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
-                const link = document.body.appendChild(document.createElement("a"));
+                const link = document.createElement("a");
                 link.setAttribute("href", url);
-                link.setAttribute("download", `소싱현황_내보내기_${new Date().toISOString().slice(0,10)}.csv`);
+                link.setAttribute("download", `소싱관리_출력_${new Date().toISOString().slice(0,10)}.csv`);
                 link.click();
-                document.body.removeChild(link);
-            };
-
-            const handleCnyChange = (val) => {
-                const cost = val ? Math.round(val * settings.exchangeRate) : '';
-                setProductForm(prev => ({ ...prev, cny: val, cost: cost }));
             };
 
             const toggleStatus = async (item, memberKey) => {
                 if (!user) return;
-                const currentStatus = item.approvals[memberKey] || 'pending';
-                const next = currentStatus === 'approved' ? 'rejected' : (currentStatus === 'rejected' ? 'pending' : 'approved');
-                const newApprovals = { ...item.approvals, [memberKey]: next };
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { approvals: newApprovals });
+                const next = (item.approvals[memberKey] || 'pending') === 'approved' ? 'rejected' : ((item.approvals[memberKey] === 'rejected') ? 'pending' : 'approved');
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { approvals: { ...item.approvals, [memberKey]: next } });
             };
 
             const toggleConfirm = async (item) => {
@@ -346,7 +340,7 @@
 
             const deleteItem = async (item) => {
                 if (!user) return;
-                if (window.confirm("이 상품을 정말 삭제하시겠습니까? (복구 불가)")) {
+                if (window.confirm("이 상품 데이터를 삭제하시겠습니까?")) {
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId));
                 }
             };
@@ -362,89 +356,99 @@
                 setIsMemoModalOpen(false);
             };
 
-            const saveSettingsBatch = async (newCategories, newTeam) => {
+            const saveSettingsBatch = async (newCategories, newProjects, newTeam) => {
                 if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { categories: newCategories, teamMembers: newTeam });
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { categories: newCategories, projects: newProjects, teamMembers: newTeam });
                 setIsSettingsOpen(false);
             };
 
             return (
-                <div className="flex h-screen bg-gray-50 text-slate-800 font-sans overflow-hidden text-sm md:text-base">
+                <div className="flex h-screen bg-gray-50 text-slate-800 font-sans overflow-hidden text-sm md:text-base selection:bg-indigo-100">
                     {/* 사이드바 */}
                     <div className={`sidebar-transition bg-white border-r border-gray-200 flex flex-col shadow-sm z-20 overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'}`}>
                         <div className="p-6 border-b border-gray-100 bg-indigo-600 text-white flex-shrink-0">
-                            <h1 className="text-xl font-bold flex items-center gap-2 whitespace-nowrap uppercase tracking-tighter">
-                                <Package className="w-6 h-6 flex-shrink-0" /> 소싱 협업 툴
+                            <h1 className="text-xl font-bold flex items-center gap-2 whitespace-nowrap tracking-tighter">
+                                <Package className="w-6 h-6 flex-shrink-0" /> 소싱 관리 보드
                             </h1>
-                            <p className="text-[10px] opacity-70 mt-1 uppercase tracking-widest flex items-center gap-1 whitespace-nowrap font-mono font-bold">
-                                <Cloud className="w-3 h-3 flex-shrink-0"/> {user ? '데이터베이스 활성' : '연결 시도 중...'}
+                            <p className="text-[10px] opacity-70 mt-1 uppercase tracking-widest flex items-center gap-1 font-bold">
+                                <Cloud className="w-3 h-3 flex-shrink-0"/> {user ? '서버 연결됨' : '연결 중...'}
                             </p>
                         </div>
                         
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
-                            {authError && <div className="p-3 text-[10px] bg-red-100 text-red-700 rounded-lg border border-red-200 font-bold leading-relaxed">{authError}</div>}
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6 font-bold">
+                            {authError && <div className="p-3 text-[10px] bg-red-100 text-red-700 rounded-lg border border-red-200 font-bold">{authError}</div>}
                             
-                            {/* 1. 진행 중 상품 */}
+                            <div className="px-3">
+                                <div className="text-[10px] font-bold text-gray-400 uppercase mb-2 flex items-center gap-2">
+                                    <Flag className="w-3 h-3" /> 시즌 / 프로젝트
+                                </div>
+                                <select 
+                                    value={activeProject} 
+                                    onChange={(e) => { setActiveProject(e.target.value); setActiveTab("전체"); }}
+                                    className="w-full bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-300 outline-none"
+                                >
+                                    <option value="전체">전체 리스트 보기</option>
+                                    {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
+                                </select>
+                            </div>
+
                             <div>
-                                <div className="px-3 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+                                <div className="px-3 mb-2 text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
                                     <LayoutDashboard className="w-3 h-3 flex-shrink-0" /> 소싱 진행 목록
                                 </div>
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('unconfirmed'); }} 
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center whitespace-nowrap transition-colors ${activeTab === "전체" && filterStatus === 'unconfirmed' ? "bg-indigo-100 text-indigo-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
-                                        <span>전체 리스트</span>
-                                        <span className="bg-indigo-200 text-indigo-800 text-xs py-0.5 px-2 rounded-full font-mono font-bold">{products.filter(p=>!p.isConfirmed && !p.isHeld).length}</span>
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center whitespace-nowrap transition-all ${activeTab === "전체" && filterStatus === 'unconfirmed' ? "bg-indigo-100 text-indigo-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
+                                        <span>전체 보기</span>
+                                        <span className="bg-indigo-200 text-indigo-800 text-xs py-0.5 px-2 rounded-full font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && !p.isConfirmed && !p.isHeld).length}</span>
                                     </button>
                                     {settings.categories.map(cat => (
                                         activeCategoryCounts[cat] > 0 && (
                                             <button key={cat} onClick={() => { setActiveTab(cat); setFilterStatus('unconfirmed'); }} 
-                                                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm flex justify-between items-center whitespace-nowrap transition-colors ${activeTab === cat && filterStatus === 'unconfirmed' ? "bg-indigo-50 text-indigo-700 font-bold ring-1 ring-indigo-200 shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
+                                                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm flex justify-between items-center transition-all ${activeTab === cat && filterStatus === 'unconfirmed' ? "bg-indigo-50 text-indigo-700 font-bold ring-1 ring-indigo-200 shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}>
                                                 <span className="truncate">{cat}</span>
-                                                <span className="text-xs text-gray-400 font-mono font-bold">{activeCategoryCounts[cat]}</span>
+                                                <span className="text-xs text-gray-400 font-mono">{activeCategoryCounts[cat]}</span>
                                             </button>
                                         )
                                     ))}
                                 </div>
                             </div>
 
-                            {/* 2. 샘플 신청 현황 */}
                             <div>
-                                <div className="px-3 mb-2 text-xs font-bold text-purple-600 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+                                <div className="px-3 mb-2 text-xs font-bold text-purple-600 uppercase flex items-center gap-2">
                                     <Truck className="w-3 h-3 flex-shrink-0" /> 샘플 현황
                                 </div>
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('sample_ordered'); }} 
-                                        className={`w-full text-left px-4 py-2 rounded-xl text-sm font-medium flex justify-between items-center whitespace-nowrap transition-colors ${filterStatus === 'sample_ordered' ? "bg-purple-100 text-purple-800 font-bold shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
-                                        <span>신청 완료 건</span>
-                                        <span className="text-xs font-mono font-bold">{products.filter(p=>p.isSampleOrdered).length}</span>
+                                        className={`w-full text-left px-4 py-2 rounded-xl text-sm font-bold flex justify-between items-center transition-all ${filterStatus === 'sample_ordered' ? "bg-purple-100 text-purple-800 shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
+                                        <span>신청 완료</span>
+                                        <span className="text-xs font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isSampleOrdered).length}</span>
                                     </button>
                                 </div>
                             </div>
 
-                            {/* 3. 최종 확정함 */}
                             <div>
-                                <div className="px-3 mb-2 text-xs font-bold text-green-600 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
-                                    <CheckCircle className="w-3 h-3 flex-shrink-0" /> 최종 확정함
+                                <div className="px-3 mb-2 text-xs font-bold text-green-600 uppercase flex items-center gap-2">
+                                    <CheckCircle className="w-3 h-3 flex-shrink-0" /> 최종 확정 목록
                                 </div>
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('confirmed'); }} 
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center whitespace-nowrap transition-colors ${activeTab === "전체" && filterStatus === 'confirmed' ? "bg-green-100 text-green-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
-                                        <span>전체 보기</span>
-                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono font-bold">{products.filter(p=>p.isConfirmed).length}</span>
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center transition-all ${activeTab === "전체" && filterStatus === 'confirmed' ? "bg-green-100 text-green-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
+                                        <span>확정 건 전체</span>
+                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isConfirmed).length}</span>
                                     </button>
                                 </div>
                             </div>
 
-                            {/* 4. 보류함 */}
                             <div>
-                                <div className="px-3 mb-2 text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
-                                    <Clock className="w-3 h-3 flex-shrink-0" /> 보류함
+                                <div className="px-3 mb-2 text-xs font-bold text-amber-600 uppercase flex items-center gap-2">
+                                    <Clock className="w-3 h-3 flex-shrink-0" /> 보류 보관함
                                 </div>
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('held'); }} 
-                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center whitespace-nowrap transition-colors ${filterStatus === 'held' ? "bg-amber-100 text-amber-800 shadow-sm font-bold" : "text-gray-700 hover:bg-gray-100"}`}>
-                                        <span>보류된 상품 목록</span>
-                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono font-bold">{products.filter(p=>p.isHeld && !p.isConfirmed).length}</span>
+                                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center transition-all ${filterStatus === 'held' ? "bg-amber-100 text-amber-800 shadow-sm font-bold" : "text-gray-700 hover:bg-gray-100"}`}>
+                                        <span>보류 중인 상품</span>
+                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isHeld && !p.isConfirmed).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -452,9 +456,9 @@
                             <CurrencyCalculatorSidebar exchangeRate={settings.exchangeRate} onRateChange={saveExchangeRate} />
                         </div>
 
-                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0 font-mono text-[10px]">
-                            <span className="text-gray-400">계정 ID: {user?.uid.slice(0, 8) || '...'}</span>
-                            <button onClick={() => setIsSettingsOpen(true)} className="text-gray-500 hover:text-indigo-600 flex items-center gap-1 font-medium">
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0 font-bold text-[10px]">
+                            <span className="text-gray-400">사용자 ID: {user?.uid.slice(0, 8) || '...'}</span>
+                            <button onClick={() => setIsSettingsOpen(true)} className="text-gray-500 hover:text-indigo-600 flex items-center gap-1">
                                 <Settings className="w-4 h-4" /> 시스템 설정
                             </button>
                         </div>
@@ -463,30 +467,22 @@
                     {/* 메인 콘텐츠 */}
                     <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-10 flex-shrink-0">
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
                                 <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
                                     <Menu className="w-5 h-5" />
                                 </button>
-                                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 truncate uppercase tracking-tight">
-                                    {activeTab} <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                    <span className={`text-sm px-2 py-0.5 rounded-full flex-shrink-0 font-bold ${
-                                        filterStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 
-                                        filterStatus === 'held' ? 'bg-amber-100 text-amber-700' :
-                                        filterStatus === 'sample_ordered' ? 'bg-purple-100 text-purple-700' :
-                                        'bg-gray-100 text-gray-600'
-                                    }`}>
-                                        {filterStatus === 'confirmed' ? '최종 확정' : filterStatus === 'held' ? '보류 중' : filterStatus === 'sample_ordered' ? '샘플 신청 완료' : '진행 및 검토 중'}
-                                    </span>
+                                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 truncate font-black tracking-tight">
+                                    {activeProject} <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" /> {activeTab}
                                 </h2>
                             </div>
                             
                             <div className="flex items-center gap-3">
                                 <div className="relative hidden md:block">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input type="text" placeholder="검색..." className="pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg text-sm w-48 focus:ring-2 focus:ring-indigo-500 outline-none font-medium" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    <input type="text" placeholder="검색..." className="pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg text-sm w-48 focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
-                                <button onClick={handleExportCSV} className="bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 shadow-sm transition-colors"><Download className="w-4 h-4"/>엑셀 내보내기</button>
-                                <button onClick={() => { setEditingItem(null); setProductForm({category: activeTab === "전체" ? settings.categories[0] : activeTab, name: '', option: '', cost: '', price: '', link: '', naverLink: '', image: null, optionImage: null, cny: ''}); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all flex-shrink-0 font-bold"><Plus className="w-4 h-4"/>새 상품 등록</button>
+                                <button onClick={handleExportCSV} className="bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 shadow-sm transition-colors"><Download className="w-4 h-4"/>출력</button>
+                                <button onClick={() => { setEditingItem(null); setProductForm({project: activeProject === "전체" ? settings.projects[0] : activeProject, category: activeTab === "전체" ? settings.categories[0] : activeTab, name: '', option: '', cost: '', price: '', link: '', naverLink: '', image: null, optionImage: null, cny: ''}); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all font-black flex-shrink-0"><Plus className="w-4 h-4"/>신규 등록</button>
                             </div>
                         </header>
 
@@ -497,16 +493,16 @@
                                         <thead className="bg-gray-50 text-gray-500 border-b">
                                             <tr>
                                                 <th className="px-4 py-4 w-12 text-center font-bold text-[11px] uppercase">번호</th>
-                                                <th className="px-2 py-4 w-24 text-center text-[11px] uppercase">메인 이미지</th>
-                                                <th className="px-6 py-4 text-[11px] uppercase">상품 및 옵션 상세 정보</th>
-                                                <th className="px-6 py-4 text-right text-[11px] uppercase">한국도착가(원가)</th>
+                                                <th className="px-2 py-4 w-24 text-center text-[11px] uppercase">이미지</th>
+                                                <th className="px-6 py-4 text-[11px] uppercase">상세 정보</th>
+                                                <th className="px-6 py-4 text-right text-[11px] uppercase">도착가</th>
                                                 <th className="px-6 py-4 text-right text-[11px] uppercase">판매가</th>
-                                                <th className="px-6 py-4 text-right text-[11px] uppercase">마진액(마진율)</th>
+                                                <th className="px-6 py-4 text-right text-[11px] uppercase">마진</th>
                                                 {settings.teamMembers.map(m => <th key={m.key} className="px-4 py-4 text-center w-20 text-[11px] font-bold uppercase">{m.label}</th>)}
-                                                <th className="px-6 py-4 text-center w-40 text-[11px] uppercase">관리 메뉴</th>
+                                                <th className="px-6 py-4 text-center w-40 text-[11px] uppercase">메뉴</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 font-medium">
+                                        <tbody className="divide-y divide-gray-100 font-bold">
                                             {filteredProducts.map((item, idx) => {
                                                 const marginValue = (item.price || 0) - (item.cost || 0);
                                                 const marginPercent = item.price ? ((marginValue / item.price) * 100).toFixed(1) : 0;
@@ -523,30 +519,33 @@
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             <div className="flex flex-col gap-1">
-                                                                {activeTab === "전체" && <div className="w-fit text-[9px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 mb-0.5">{item.category}</div>}
+                                                                <div className="flex gap-1.5 flex-wrap">
+                                                                    {(activeProject === "전체") && <div className="w-fit text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 font-bold">{item.project}</div>}
+                                                                    {(activeTab === "전체") && <div className="w-fit text-[9px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 font-bold">{item.category}</div>}
+                                                                </div>
                                                                 <div className="flex items-center gap-2 font-bold">
                                                                     <div className="text-gray-900 line-clamp-1">{item.name}</div>
-                                                                    {item.isSampleOrdered && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 uppercase">샘플완료</span>}
+                                                                    {item.isSampleOrdered && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-black">샘플완료</span>}
                                                                 </div>
                                                                 <div className="flex items-center gap-2 mt-1">
-                                                                    <div className="text-xs text-gray-500 line-clamp-1 italic font-medium">{item.option || '등록된 옵션 텍스트 없음'}</div>
+                                                                    <div className="text-xs text-gray-500 line-clamp-1 italic font-bold">{item.option || '옵션 기재 없음'}</div>
                                                                     {item.optionImage && (
-                                                                        <button onClick={() => setPreviewImage(item.optionImage)} className="w-7 h-7 bg-white border border-gray-200 rounded p-0.5 shadow-sm hover:ring-2 hover:ring-amber-400 transition-all overflow-hidden flex-shrink-0" title="옵션 이미지 보기">
+                                                                        <button onClick={() => setPreviewImage(item.optionImage)} className="w-7 h-7 bg-white border border-gray-200 rounded p-0.5 shadow-sm hover:ring-2 hover:ring-amber-400 transition-all flex-shrink-0 overflow-hidden">
                                                                             <img src={item.optionImage} className="w-full h-full object-cover rounded-[1px]" />
                                                                         </button>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex gap-2 mt-1">
-                                                                    {item.link && <a href={item.link} target="_blank" className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded border border-orange-100 hover:bg-orange-100 transition-colors font-bold tracking-tight">1688 바로가기</a>}
-                                                                    {item.naverLink && <a href={item.naverLink} target="_blank" className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded border border-green-100 hover:bg-green-100 transition-colors font-bold tracking-tight">타사/네이버</a>}
+                                                                <div className="flex gap-2 mt-1 font-bold">
+                                                                    {item.link && <a href={item.link} target="_blank" className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded border border-orange-100 hover:bg-orange-100 transition-colors tracking-tight">1688 바로가기</a>}
+                                                                    {item.naverLink && <a href={item.naverLink} target="_blank" className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded border border-green-100 hover:bg-green-100 transition-colors tracking-tight">경쟁사 주소</a>}
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-4 text-right font-medium text-gray-600 font-mono">{item.cost?.toLocaleString()}원</td>
-                                                        <td className="px-6 py-4 text-right font-medium text-gray-900 font-mono">{item.price?.toLocaleString()}원</td>
+                                                        <td className="px-6 py-4 text-right font-medium text-gray-600 font-mono tracking-tighter">{item.cost?.toLocaleString()}원</td>
+                                                        <td className="px-6 py-4 text-right font-medium text-gray-900 font-mono tracking-tighter">{item.price?.toLocaleString()}원</td>
                                                         <td className="px-6 py-4 text-right">
-                                                            <div className={`font-bold font-mono ${isNeg ? 'text-red-600' : 'text-indigo-600'}`}>{marginValue?.toLocaleString()}원</div>
-                                                            <div className={`text-[10px] font-medium font-mono ${isNeg ? 'text-red-400' : 'text-gray-400'}`}>({marginPercent}%)</div>
+                                                            <div className={`font-black font-mono tracking-tighter ${isNeg ? 'text-red-600' : 'text-indigo-600'}`}>{marginValue?.toLocaleString()}원</div>
+                                                            <div className={`text-[10px] font-black font-mono tracking-tighter ${isNeg ? 'text-red-400' : 'text-gray-400'}`}>({marginPercent}%)</div>
                                                         </td>
                                                         {settings.teamMembers.map(m => (
                                                             <td key={m.key} className="px-4 py-4 text-center">
@@ -556,22 +555,22 @@
                                                         <td className="px-6 py-4">
                                                             <div className="flex flex-col gap-1.5">
                                                                 <div className="flex gap-1">
-                                                                    <button onClick={() => toggleHold(item)} className={`flex-1 py-1.5 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors ${item.isHeld ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'}`} title="보류 여부 토글">
+                                                                    <button onClick={() => toggleHold(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isHeld ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'}`}>
                                                                         <Clock className="w-3 h-3"/> {item.isHeld ? '해제' : '보류'}
                                                                     </button>
-                                                                    <button onClick={() => toggleConfirm(item)} className={`flex-1 py-1.5 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors ${item.isConfirmed ? 'bg-green-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'}`} title="확정 여부 토글">
+                                                                    <button onClick={() => toggleConfirm(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'}`}>
                                                                         <CheckCircle className="w-3 h-3"/> {item.isConfirmed ? '취소' : '확정'}
                                                                     </button>
                                                                 </div>
                                                                 <div className="flex gap-1">
-                                                                    <button onClick={() => toggleSample(item)} className={`flex-1 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors ${item.isSampleOrdered ? 'bg-purple-600 text-white shadow-md font-black' : 'bg-gray-50 text-gray-400 border border-gray-100 hover:bg-gray-200'}`}>
+                                                                    <button onClick={() => toggleSample(item)} className={`flex-1 py-1 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isSampleOrdered ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-50 text-gray-400 border border-gray-100 hover:bg-gray-200'}`}>
                                                                         <Truck className="w-3 h-3"/> 샘플신청
                                                                     </button>
                                                                 </div>
                                                                 <div className="flex justify-center gap-2 mt-0.5">
-                                                                    <button onClick={() => { setMemoTarget({id: item.firebaseId, content: item.memo || ''}); setIsMemoModalOpen(true); }} className={`p-1.5 rounded hover:bg-amber-50 transition-colors ${item.memo ? 'text-amber-500' : 'text-gray-300'}`} title="상품 메모 작성/수정"><StickyNote className="w-4 h-4"/></button>
-                                                                    <button onClick={() => { setEditingItem(item); setProductForm({...item}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="상품 정보 수정"><Edit2 className="w-4 h-4"/></button>
-                                                                    <button onClick={() => deleteItem(item)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="상품 삭제"><Trash2 className="w-4 h-4"/></button>
+                                                                    <button onClick={() => { setMemoTarget({id: item.firebaseId, content: item.memo || ''}); setIsMemoModalOpen(true); }} className={`p-1.5 rounded hover:bg-amber-50 transition-colors ${item.memo ? 'text-amber-500' : 'text-gray-300'}`} title="메모"><StickyNote className="w-4 h-4"/></button>
+                                                                    <button onClick={() => { setEditingItem(item); setProductForm({...item}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="수정"><Edit2 className="w-4 h-4"/></button>
+                                                                    <button onClick={() => deleteItem(item)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제"><Trash2 className="w-4 h-4"/></button>
                                                                 </div>
                                                             </div>
                                                         </td>
@@ -582,22 +581,21 @@
                                     </table>
                                 </div>
                             ) : (
-                                <div className="p-20 text-center text-gray-400 bg-white rounded-2xl border-2 border-dashed border-gray-200 font-bold uppercase tracking-widest animate-pulse">등록된 데이터가 없습니다.</div>
+                                <div className="p-20 text-center text-gray-400 bg-white rounded-2xl border-2 border-dashed border-gray-200 font-black italic animate-pulse tracking-widest">상품 데이터가 존재하지 않습니다.</div>
                             )}
                         </main>
                     </div>
 
-                    {/* 등록/수정 모달 */}
+                    {/* 모달 - 등록/수정 */}
                     {isAddModalOpen && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200 text-slate-800">
                             <div className="bg-white rounded-2xl w-full max-w-xl p-6 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-indigo-800 uppercase tracking-tighter">{editingItem ? '상품 정보 수정' : '신규 상품 등록'}</h3>
+                                    <h3 className="text-xl font-black text-indigo-900 uppercase tracking-tighter">{editingItem ? '상품 정보 수정' : '신규 상품 등록'}</h3>
                                     <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="w-6 h-6"/></button>
                                 </div>
-                                <form onSubmit={handleAddOrUpdateProduct} className="space-y-6">
+                                <form onSubmit={handleAddOrUpdateProduct} className="space-y-6 font-bold">
                                     <div className="grid grid-cols-2 gap-4">
-                                        {/* 메인 이미지 영역 */}
                                         <div className={`h-44 bg-gray-50 border-2 border-dashed rounded-xl flex flex-col items-center justify-center relative overflow-hidden group transition-all cursor-pointer ${lastTargetZone === 'main' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-indigo-300'}`} onClick={() => setLastTargetZone('main')}>
                                             {productForm.image ? (
                                                 <>
@@ -607,8 +605,8 @@
                                             ) : (
                                                 <div className="text-center p-4">
                                                     <div className="mx-auto w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mb-3"><ImageIcon className="w-6 h-6" /></div>
-                                                    <div className="text-xs text-gray-700 font-black uppercase tracking-tighter">메인 이미지</div>
-                                                    <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-widest">여기를 클릭하거나 Ctrl+V 붙여넣기</div>
+                                                    <div className="text-xs text-gray-700 font-black uppercase font-sans">메인 이미지</div>
+                                                    <div className="text-[9px] text-gray-400 mt-1 uppercase font-black">클릭 또는 붙여넣기(Ctrl+V)</div>
                                                 </div>
                                             )}
                                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => {
@@ -618,7 +616,6 @@
                                             }} />
                                         </div>
 
-                                        {/* 옵션 이미지 영역 */}
                                         <div className={`h-44 bg-gray-50 border-2 border-dashed rounded-xl flex flex-col items-center justify-center relative overflow-hidden group transition-all cursor-pointer ${lastTargetZone === 'option' ? 'border-amber-500 bg-amber-50/50' : 'border-gray-200 hover:border-amber-300'}`} onClick={() => setLastTargetZone('option')}>
                                             {productForm.optionImage ? (
                                                 <>
@@ -628,8 +625,8 @@
                                             ) : (
                                                 <div className="text-center p-4">
                                                     <div className="mx-auto w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mb-3"><ImageIcon className="w-6 h-6" /></div>
-                                                    <div className="text-xs text-gray-700 font-black uppercase tracking-tighter">옵션 이미지</div>
-                                                    <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-widest">여기를 클릭하거나 Ctrl+V 붙여넣기</div>
+                                                    <div className="text-xs text-gray-700 font-black uppercase font-sans">상세 옵션 이미지</div>
+                                                    <div className="text-[9px] text-gray-400 mt-1 uppercase font-black">클릭 또는 붙여넣기(Ctrl+V)</div>
                                                 </div>
                                             )}
                                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => {
@@ -642,62 +639,66 @@
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 mb-1.5 block uppercase">카테고리</label>
-                                            <select value={productForm.category} onChange={(e) => setProductForm({...productForm, category: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700 bg-gray-50" required>
-                                                {settings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            <label className="text-xs font-black text-gray-500 mb-2 block font-black uppercase">시즌 / 프로젝트 *</label>
+                                            <select value={productForm.project} onChange={(e) => setProductForm({...productForm, project: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-indigo-900 bg-indigo-50/50 shadow-sm" required>
+                                                <option value="" disabled>시즌을 선택하세요</option>
+                                                {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 mb-1.5 block uppercase">옵션 / 사이즈 (텍스트)</label>
-                                            <input type="text" placeholder="예: 화이트-라지" value={productForm.option} onChange={(e) => setProductForm({...productForm, option: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold shadow-sm" />
+                                            <label className="text-xs font-black text-gray-500 mb-2 block font-black uppercase">카테고리 *</label>
+                                            <select value={productForm.category} onChange={(e) => setProductForm({...productForm, category: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-slate-700 bg-gray-50 shadow-sm" required>
+                                                <option value="" disabled>카테고리를 선택하세요</option>
+                                                {settings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="text-xs font-black text-gray-500 mb-1.5 block uppercase">상품 이름</label>
-                                        <input type="text" placeholder="전체 상품명을 입력하세요" required value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold shadow-sm" />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-1">
+                                            <label className="text-xs font-black text-gray-500 mb-2 block font-black uppercase">상품 명칭 *</label>
+                                            <input type="text" placeholder="상품명 입력" required value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black shadow-sm" />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="text-xs font-black text-gray-500 mb-2 block font-black uppercase">옵션 상세 (텍스트)</label>
+                                            <input type="text" placeholder="예: 레드 / XL" value={productForm.option} onChange={(e) => setProductForm({...productForm, option: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black shadow-sm" />
+                                        </div>
                                     </div>
                                     
                                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-inner">
-                                        <label className="block text-xs font-black text-indigo-700 mb-3 flex items-center gap-2 uppercase tracking-wide"><RefreshCw className="w-3 h-3" /> 원가 계산기 (위안화 기준)</label>
-                                        <div className="flex gap-4 items-end">
-                                            <div className="flex-1">
-                                                <label className="block text-[10px] text-gray-500 mb-1 font-bold uppercase tracking-widest">위안화 가격(CNY)</label>
-                                                <input type="number" step="any" value={productForm.cny} onChange={(e) => handleCnyChange(e.target.value)} className="w-full rounded-lg border-indigo-200 text-sm p-2.5 border font-mono font-bold shadow-sm" placeholder="0.00" />
+                                        <label className="block text-xs font-black text-indigo-700 mb-3 flex items-center gap-2 uppercase font-black"><RefreshCw className="w-3 h-3" /> 원가 계산기 (위안화 기준)</label>
+                                        <div className="flex gap-4 items-end font-mono">
+                                            <div className="flex-1 font-bold">
+                                                <label className="block text-[10px] text-gray-500 mb-1 font-black font-sans uppercase">현지 위안화 가격</label>
+                                                <input type="number" step="any" value={productForm.cny} onChange={(e) => handleCnyChange(e.target.value)} className="w-full rounded-lg border-indigo-200 text-sm p-3 border font-mono font-black shadow-sm" placeholder="0.00" />
                                             </div>
-                                            <div className="pb-3 text-indigo-400 text-xs font-black font-mono">× {settings.exchangeRate} =</div>
+                                            <div className="pb-3.5 text-indigo-400 text-xs font-black font-sans uppercase">× {settings.exchangeRate} =</div>
                                             <div className="flex-1">
-                                                <label className="block text-[10px] text-gray-500 mb-1 font-bold uppercase tracking-widest">한화 도착가 예상(KRW)</label>
-                                                <div className="w-full rounded-lg bg-white border border-indigo-200 text-sm p-2.5 text-indigo-700 font-black font-mono shadow-sm">{productForm.cost ? Math.round(productForm.cost).toLocaleString() : 0}</div>
+                                                <label className="block text-[10px] text-gray-500 mb-1 font-black font-sans uppercase">한화 환산 예상가</label>
+                                                <div className="w-full rounded-lg bg-white border border-indigo-200 text-sm p-3 text-indigo-700 font-black shadow-sm">{productForm.cost ? Math.round(productForm.cost).toLocaleString() : 0}</div>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-[10px] font-black text-gray-400 mb-1 block uppercase tracking-widest font-bold">최종 원가 확정(KRW) *</label>
-                                            <input type="number" required value={productForm.cost} onChange={(e) => setProductForm({...productForm, cost: e.target.value, cny: ''})} className="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold shadow-sm" placeholder="0" />
+                                            <label className="text-[10px] font-black text-gray-400 mb-1.5 block font-bold uppercase">최종 확정 원가(KRW) *</label>
+                                            <input type="number" required value={productForm.cost} onChange={(e) => setProductForm({...productForm, cost: e.target.value, cny: ''})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-black shadow-sm" placeholder="0" />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-black text-gray-400 mb-1 block uppercase tracking-widest font-bold">국내 판매가 설정(KRW) *</label>
-                                            <input type="number" required value={productForm.price} onChange={(e) => setProductForm({...productForm, price: e.target.value})} className="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold shadow-sm" placeholder="0" />
+                                            <label className="text-[10px] font-black text-gray-400 mb-1.5 block font-bold uppercase">판매 목표가(KRW) *</label>
+                                            <input type="number" required value={productForm.price} onChange={(e) => setProductForm({...productForm, price: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-black shadow-sm" placeholder="0" />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-3">
-                                        <div className="relative group">
-                                            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                                            <input type="url" placeholder="1688 소싱 페이지 URL" value={productForm.link} onChange={(e) => setProductForm({...productForm, link: e.target.value})} className="w-full border rounded-lg pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-medium shadow-sm transition-all" />
-                                        </div>
-                                        <div className="relative group">
-                                            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                                            <input type="url" placeholder="네이버/쿠팡 경쟁사 판매 URL" value={productForm.naverLink} onChange={(e) => setProductForm({...productForm, naverLink: e.target.value})} className="w-full border rounded-lg pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-medium shadow-sm transition-all" />
-                                        </div>
+                                    <div className="space-y-3 font-medium">
+                                        <input type="url" placeholder="1688 소싱 주소(URL)" value={productForm.link} onChange={(e) => setProductForm({...productForm, link: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all font-bold" />
+                                        <input type="url" placeholder="경쟁사 판매 주소(URL)" value={productForm.naverLink} onChange={(e) => setProductForm({...productForm, naverLink: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all font-bold" />
                                     </div>
                                     
-                                    <div className="flex gap-3 pt-4 border-t border-gray-100">
-                                        <button type="button" onClick={() => setIsAddModalOpen(false)} className="flex-1 bg-gray-100 py-3 rounded-xl text-sm font-black text-gray-600 hover:bg-gray-200 transition-all uppercase tracking-widest font-bold">취소하기</button>
-                                        <button type="submit" className="flex-2 grow-[2] bg-indigo-600 text-white py-3 rounded-xl text-sm font-black shadow-lg hover:bg-indigo-700 hover:scale-[1.02] transition-all uppercase tracking-widest font-bold">상품 저장하기</button>
+                                    <div className="flex gap-4 pt-4 border-t border-gray-100 font-black uppercase">
+                                        <button type="button" onClick={() => setIsAddModalOpen(false)} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-sm text-gray-600 hover:bg-gray-200 transition-all">취소</button>
+                                        <button type="submit" className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-sm shadow-lg hover:bg-indigo-700 hover:scale-[1.01] transition-all">상품 저장 완료</button>
                                     </div>
                                 </form>
                             </div>
@@ -706,23 +707,15 @@
 
                     {/* 메모 모달 */}
                     {isMemoModalOpen && (
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800">
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-bold">
                             <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl border border-gray-100 font-bold">
-                                <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-amber-600 uppercase tracking-tighter font-bold"><StickyNote className="w-6 h-6"/> 상품별 특이사항 메모 수정</h3>
-                                <textarea value={memoTarget.content} onChange={(e) => setMemoTarget({...memoTarget, content: e.target.value})} className="w-full h-48 p-4 border rounded-xl text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none font-medium shadow-inner bg-amber-50/30" placeholder="상품에 대한 특이사항을 자유롭게 기록하세요..." />
-                                <div className="flex justify-end gap-3 mt-5 font-bold">
-                                    <button onClick={() => setIsMemoModalOpen(false)} className="px-5 py-2.5 text-sm text-gray-500 hover:text-gray-700 uppercase tracking-wide">닫기</button>
-                                    <button onClick={saveMemo} className="px-6 py-2.5 text-sm bg-amber-500 text-white rounded-xl font-black shadow-md hover:bg-amber-600 transition-all uppercase tracking-wide font-bold">메모 저장</button>
+                                <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-amber-600 uppercase font-bold"><StickyNote className="w-6 h-6"/> 상품별 특이사항 기록</h3>
+                                <textarea value={memoTarget.content} onChange={(e) => setMemoTarget({...memoTarget, content: e.target.value})} className="w-full h-48 p-4 border rounded-xl text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none font-bold shadow-inner bg-amber-50/20" placeholder="기록할 내용을 자유롭게 적으세요..." />
+                                <div className="flex justify-end gap-3 mt-5">
+                                    <button onClick={() => setIsMemoModalOpen(false)} className="px-5 py-2.5 text-sm text-gray-500 hover:text-gray-700 font-bold">닫기</button>
+                                    <button onClick={saveMemo} className="px-6 py-2.5 text-sm bg-amber-500 text-white rounded-xl font-black shadow-md hover:bg-amber-600 transition-all font-bold">기록 저장</button>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* 이미지 뷰어 */}
-                    {previewImage && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[200] animate-in zoom-in duration-150" onClick={() => setPreviewImage(null)}>
-                            <img src={previewImage} className="max-w-[95%] max-h-[95%] object-contain rounded shadow-2xl border-4 border-white/10" />
-                            <button className="absolute top-6 right-6 text-white bg-white/10 p-3 rounded-full hover:bg-white/30 transition-all"><X className="w-8 h-8"/></button>
                         </div>
                     )}
 
@@ -730,6 +723,7 @@
                     {isSettingsOpen && (
                         <SettingsModal 
                             currentCategories={settings.categories} 
+                            currentProjects={settings.projects}
                             currentTeam={settings.teamMembers} 
                             onClose={() => setIsSettingsOpen(false)} 
                             onSave={saveSettingsBatch}
@@ -739,45 +733,77 @@
             );
         }
 
-        const SettingsModal = ({ currentCategories, currentTeam, onClose, onSave }) => {
+        const SettingsModal = ({ currentCategories, currentProjects, currentTeam, onClose, onSave }) => {
             const [cats, setCats] = useState([...currentCategories]);
+            const [projs, setProjs] = useState([...currentProjects]);
             const [team, setTeam] = useState([...currentTeam]);
+
+            const moveItem = (list, setList, index, direction) => {
+                const newList = [...list];
+                const newIndex = direction === 'up' ? index - 1 : index + 1;
+                if (newIndex < 0 || newIndex >= list.length) return;
+                [newList[index], newList[newIndex]] = [newList[newIndex], newList[index]];
+                setList(newList);
+            };
+
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-bold">
-                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl flex flex-col h-[550px]">
+                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl flex flex-col h-[650px] font-bold">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-black uppercase tracking-tighter text-indigo-900 font-bold">전체 시스템 설정</h3>
+                            <h3 className="text-xl font-black uppercase text-indigo-900 font-bold shadow-sm border-b-2 border-indigo-100 pb-1 tracking-tighter">시스템 통합 설정 관리</h3>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="w-6 h-6"/></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-10 font-bold">
                             <section>
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-bold">상품 카테고리 관리</label>
+                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">시즌 및 대분류 목록 (드래그 순서 변경)</label>
+                                <div className="space-y-2">
+                                    {projs.map((p, i) => (
+                                        <div key={i} className="flex items-center gap-2 group transition-all">
+                                            <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100">
+                                                <button onClick={() => moveItem(projs, setProjs, i, 'up')} className="hover:text-indigo-500 transition-colors"><ChevronUp className="w-3 h-3"/></button>
+                                                <button onClick={() => moveItem(projs, setProjs, i, 'down')} className="hover:text-indigo-500 transition-colors"><ChevronDown className="w-3 h-3"/></button>
+                                            </div>
+                                            <input value={p} onChange={(e) => { const n = [...projs]; n[i] = e.target.value; setProjs(n); }} className="flex-1 border rounded-lg p-2 text-sm font-bold focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" />
+                                            <button onClick={() => setProjs(projs.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => setProjs([...projs, "새 분류 명칭"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-bold">+ 신규 분류 추가</button>
+                                </div>
+                            </section>
+
+                            <section>
+                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">소싱 카테고리 관리 (순서 변경)</label>
                                 <div className="space-y-2">
                                     {cats.map((c, i) => (
-                                        <div key={i} className="flex gap-2 group transition-all">
-                                            <input value={c} onChange={(e) => { const n = [...cats]; n[i] = e.target.value; setCats(n); }} className="flex-1 border rounded-lg p-2 text-sm font-medium focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50 transition-colors" />
+                                        <div key={i} className="flex items-center gap-2 group transition-all">
+                                            <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100">
+                                                <button onClick={() => moveItem(cats, setCats, i, 'up')} className="hover:text-indigo-500 transition-colors"><ChevronUp className="w-3 h-3"/></button>
+                                                <button onClick={() => moveItem(cats, setCats, i, 'down')} className="hover:text-indigo-500 transition-colors"><ChevronDown className="w-3 h-3"/></button>
+                                            </div>
+                                            <input value={c} onChange={(e) => { const n = [...cats]; n[i] = e.target.value; setCats(n); }} className="flex-1 border rounded-lg p-2 text-sm font-bold focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" />
                                             <button onClick={() => setCats(cats.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
                                         </div>
                                     ))}
-                                    <button onClick={() => setCats([...cats, "새 카테고리"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black uppercase tracking-tighter font-bold">+ 카테고리 추가</button>
+                                    <button onClick={() => setCats([...cats, "새 카테고리"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-bold">+ 신규 카테고리 추가</button>
                                 </div>
                             </section>
+
                             <section>
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-bold">협업 팀원 관리</label>
-                                <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">팀원 관리</label>
+                                <div className="space-y-2 font-bold">
                                     {team.map((m, i) => (
-                                        <div key={i} className="flex gap-2 group transition-all">
-                                            <input value={m.label} onChange={(e) => { const n = [...team]; n[i] = { ...m, label: e.target.value }; setTeam(n); }} className="flex-1 border rounded-lg p-2 text-sm font-medium focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50 transition-colors" />
-                                            <button onClick={() => setTeam(team.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                                        <div key={i} className="flex gap-2 group transition-all font-bold">
+                                            <input value={m.label} onChange={(e) => { const n = [...team]; n[i] = { ...m, label: e.target.value }; setTeam(n); }} className="flex-1 border rounded-lg p-2 text-sm font-bold focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" />
+                                            <button onClick={() => setTeam(team.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 font-bold"><Trash2 className="w-4 h-4"/></button>
                                         </div>
                                     ))}
-                                    <button onClick={() => setTeam([...team, { key: `member_${Date.now()}`, label: "새 팀원" }])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black uppercase tracking-tighter font-bold">+ 팀원 추가</button>
+                                    <button onClick={() => setTeam([...team, { key: `member_${Date.now()}`, label: "새 팀원 성함" }])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-bold uppercase">+ 새 팀원 추가</button>
                                 </div>
                             </section>
                         </div>
-                        <div className="flex gap-3 mt-8 flex-shrink-0">
-                            <button onClick={onClose} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-xs font-black text-gray-500 hover:bg-gray-200 transition-all uppercase font-bold">닫기</button>
-                            <button onClick={() => onSave(cats, team)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs font-black shadow-lg hover:bg-indigo-700 transition-all uppercase tracking-widest font-bold font-bold">설정 변경 사항 적용</button>
+                        <div className="flex gap-4 mt-8 flex-shrink-0 font-black">
+                            <button onClick={onClose} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-xs text-gray-500 hover:bg-gray-200 transition-all font-bold">변경 취소</button>
+                            <button onClick={() => onSave(cats, projs, team)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-bold">설정 저장 및 즉시 적용</button>
                         </div>
                     </div>
                 </div>
