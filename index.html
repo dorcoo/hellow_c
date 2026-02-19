@@ -40,12 +40,12 @@
     <!-- Firebase SDK (모듈) -->
     <script type="module">
         // 안정성을 위해 버전 10.12.5 (Stable) 사용
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-        // 전역 객체에 할당
-        window.FirebaseSDK = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch };
+        // 전역 객체에 할당 (getApps 추가)
+        window.FirebaseSDK = { initializeApp, getApps, getApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch };
         
         // 로딩 완료 플래그 설정 및 이벤트 발송
         window.isFirebaseReady = true;
@@ -100,6 +100,43 @@
             Package, Search, Check, X, Minus, Calculator, ImageIcon, Trash2, Plus, Settings, Edit2, 
             StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Clock, Flag, ChevronUp, ChevronDown
         } = Icons;
+
+        // --- 에러 바운더리 컴포넌트 (흰색 화면 방지) ---
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null, errorInfo: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                console.error("React Error:", error, errorInfo);
+                this.setState({ errorInfo });
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="p-10 bg-red-50 text-red-900 min-h-screen flex flex-col items-center justify-center font-sans">
+                            <h2 className="text-3xl font-black mb-4 flex items-center gap-2">⚠️ 시스템 오류 발생</h2>
+                            <p className="mb-6 text-lg">데이터를 처리하는 도중 문제가 발생했습니다.<br/>아래 에러 내용을 확인하거나 페이지를 새로고침 해주세요.</p>
+                            <div className="bg-white p-6 rounded-xl border border-red-200 shadow-lg max-w-2xl w-full overflow-auto">
+                                <p className="font-bold text-red-600 mb-2">Error Message:</p>
+                                <pre className="text-sm bg-gray-100 p-3 rounded text-gray-700 whitespace-pre-wrap font-mono mb-4">{this.state.error && this.state.error.toString()}</pre>
+                                
+                                <p className="font-bold text-gray-600 mb-2">Component Stack:</p>
+                                <pre className="text-xs text-gray-500 whitespace-pre-wrap font-mono">{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
+                            </div>
+                            <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-red-600 text-white rounded-lg font-bold shadow-md hover:bg-red-700 transition-colors">페이지 새로고침</button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
 
         // --- 서브 컴포넌트 ---
         const StatusButton = ({ status, onClick }) => {
@@ -238,14 +275,15 @@
 
         // --- 메인 App 컴포넌트 ---
         function App({ firebaseSDK }) {
-            // SDK를 Props로 안전하게 받아서 사용
-            const { getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch, initializeApp } = firebaseSDK;
+            // SDK를 Props로 안전하게 받아서 사용 (getApps 추가)
+            const { getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch, initializeApp, getApps } = firebaseSDK;
 
             const [user, setUser] = useState(null);
             const [authError, setAuthError] = useState(null);
             const [activeTab, setActiveTab] = useState("전체");
             const [activeProject, setActiveProject] = useState("전체");
             const [products, setProducts] = useState([]);
+            // [중요] 초기 렌더링 시 map 에러 방지를 위해 배열 초기값 보장
             const [settings, setSettings] = useState({ 
                 categories: [], categoryFees: {}, categoryRatios: {}, projects: [], teamMembers: [], exchangeRate: 195 
             });
@@ -265,7 +303,7 @@
             });
             const [lastTargetZone, setLastTargetZone] = useState('main');
 
-            // Firebase 초기화 (useMemo로 1회만 실행 보장)
+            // Firebase 초기화 (useMemo로 1회만 실행 보장 + 중복 init 방지)
             const { auth, db, appId } = useMemo(() => {
                 const firebaseConfig = {
                     apiKey: "AIzaSyBCitvHwUFoRoRqTm-7lL-914T8tmHZYHE",
@@ -275,7 +313,15 @@
                     messagingSenderId: "544793341133",
                     appId: "1:544793341133:web:cafc1766980b6322cd4d84"
                 };
-                const app = initializeApp(firebaseConfig);
+                
+                // [수정] 앱이 이미 초기화되었는지 확인
+                let app;
+                if (!getApps().length) {
+                    app = initializeApp(firebaseConfig);
+                } else {
+                    app = getApps()[0]; // 이미 존재하는 앱 사용
+                }
+                
                 return {
                     auth: getAuth(app),
                     db: getFirestore(app),
@@ -318,9 +364,15 @@
                 const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
-                        if(!data.categoryFees) data.categoryFees = {};
-                        if(!data.categoryRatios) data.categoryRatios = {};
-                        setSettings(data);
+                        // [수정] 안전한 데이터 로딩: DB 필드가 누락되어도 앱이 죽지 않도록 기본값 할당
+                        setSettings({ 
+                            categories: data.categories || [], 
+                            categoryFees: data.categoryFees || {}, 
+                            categoryRatios: data.categoryRatios || {}, 
+                            projects: data.projects || [], 
+                            teamMembers: data.teamMembers || [], 
+                            exchangeRate: data.exchangeRate || 195 
+                        });
                     } else {
                         const initSet = { 
                             categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩"], 
@@ -901,8 +953,12 @@
                 );
             }
 
-            // 준비 완료 후 App에 SDK를 Props로 전달 (가장 안전함)
-            return <App firebaseSDK={window.FirebaseSDK} />;
+            // [수정] App을 ErrorBoundary로 감싸서 렌더링 에러가 발생해도 흰 화면이 뜨지 않게 함
+            return (
+                <ErrorBoundary>
+                    <App firebaseSDK={window.FirebaseSDK} />
+                </ErrorBoundary>
+            );
         }
 
         // 앱 실행
