@@ -60,8 +60,8 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
 
-        // [중요] 여기서 window.FirebaseSDK를 구조분해할당 하지 않습니다. 
-        // App 컴포넌트 내부나 초기화 이후에 실행하도록 미룹니다.
+        // [기본 설정] DB에 설정이 없을 때 사용할 초기 비밀번호
+        const DEFAULT_MASTER_PW = "1234";
 
         // --- 아이콘 컴포넌트 ---
         const IconBase = ({ children, className, ...props }) => (
@@ -94,42 +94,32 @@
             Flag: (props) => <IconBase {...props}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></IconBase>,
             ChevronUp: (props) => <IconBase {...props}><polyline points="18 15 12 9 6 15"/></IconBase>,
             ChevronDown: (props) => <IconBase {...props}><polyline points="6 9 12 15 18 9"/></IconBase>,
+            Lock: (props) => <IconBase {...props}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>,
+            Shield: (props) => <IconBase {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></IconBase>,
+            User: (props) => <IconBase {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>,
+            Key: (props) => <IconBase {...props}><path d="m21 2-2 2m-7.6 7.6a6 6 0 1 1-8.4-8.4 6 6 0 0 1 8.4 8.4Zm5.2.5 2-2a2 2 0 0 0 2.8 2.8l-5-5"/><path d="m15 15 3 3"/></IconBase>,
+            FileText: (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></IconBase>,
+            RotateCcw: (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></IconBase>,
         };
 
         const { 
             Package, Search, Check, X, Minus, Calculator, ImageIcon, Trash2, Plus, Settings, Edit2, 
-            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Clock, Flag, ChevronUp, ChevronDown
+            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw
         } = Icons;
 
-        // --- 에러 바운더리 컴포넌트 (흰색 화면 방지) ---
+        // --- 에러 바운더리 컴포넌트 ---
         class ErrorBoundary extends React.Component {
             constructor(props) {
                 super(props);
                 this.state = { hasError: false, error: null, errorInfo: null };
             }
-
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error };
-            }
-
-            componentDidCatch(error, errorInfo) {
-                console.error("React Error:", error, errorInfo);
-                this.setState({ errorInfo });
-            }
-
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            componentDidCatch(error, errorInfo) { console.error("React Error:", error, errorInfo); this.setState({ errorInfo }); }
             render() {
                 if (this.state.hasError) {
                     return (
                         <div className="p-10 bg-red-50 text-red-900 min-h-screen flex flex-col items-center justify-center font-sans">
                             <h2 className="text-3xl font-black mb-4 flex items-center gap-2">⚠️ 시스템 오류 발생</h2>
-                            <p className="mb-6 text-lg">데이터를 처리하는 도중 문제가 발생했습니다.<br/>아래 에러 내용을 확인하거나 페이지를 새로고침 해주세요.</p>
-                            <div className="bg-white p-6 rounded-xl border border-red-200 shadow-lg max-w-2xl w-full overflow-auto">
-                                <p className="font-bold text-red-600 mb-2">Error Message:</p>
-                                <pre className="text-sm bg-gray-100 p-3 rounded text-gray-700 whitespace-pre-wrap font-mono mb-4">{this.state.error && this.state.error.toString()}</pre>
-                                
-                                <p className="font-bold text-gray-600 mb-2">Component Stack:</p>
-                                <pre className="text-xs text-gray-500 whitespace-pre-wrap font-mono">{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
-                            </div>
                             <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-red-600 text-white rounded-lg font-bold shadow-md hover:bg-red-700 transition-colors">페이지 새로고침</button>
                         </div>
                     );
@@ -137,6 +127,107 @@
                 return this.props.children;
             }
         }
+
+        // --- 로그인 스크린 ---
+        const LoginScreen = ({ onLogin, firebaseSDK }) => {
+            const [inputPw, setInputPw] = useState("");
+            const [error, setError] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [serverPasswords, setServerPasswords] = useState({ master: DEFAULT_MASTER_PW, memberPasswords: {} });
+
+            useEffect(() => {
+                const initAndFetch = async () => {
+                    try {
+                        const { initializeApp, getApps, getAuth, signInAnonymously, getFirestore, doc, getDoc } = firebaseSDK;
+                        const firebaseConfig = {
+                            apiKey: "AIzaSyBCitvHwUFoRoRqTm-7lL-914T8tmHZYHE",
+                            authDomain: "from-to-c.firebaseapp.com",
+                            projectId: "from-to-c",
+                            storageBucket: "from-to-c.firebasestorage.app",
+                            messagingSenderId: "544793341133",
+                            appId: "1:544793341133:web:cafc1766980b6322cd4d84"
+                        };
+                        const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+                        const auth = getAuth(app);
+                        const db = getFirestore(app);
+                        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sourcing-app-v2';
+
+                        await signInAnonymously(auth);
+                        const securityRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security');
+                        const snap = await getDoc(securityRef);
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            setServerPasswords({ 
+                                master: data.master || DEFAULT_MASTER_PW, 
+                                memberPasswords: data.memberPasswords || {} 
+                            });
+                        }
+                    } catch (e) {
+                        console.error("보안 설정 로드 실패 (기본값 사용):", e);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                initAndFetch();
+            }, []);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (inputPw === serverPasswords.master) {
+                    onLogin('admin', 'master');
+                } else {
+                    // 팀원 비밀번호 확인
+                    const memberKey = Object.keys(serverPasswords.memberPasswords).find(key => serverPasswords.memberPasswords[key] === inputPw);
+                    if (memberKey) {
+                        onLogin('member', memberKey);
+                    } else if (inputPw === "5678") {
+                        // 레거시/기본 비밀번호 지원 (초기 설정용)
+                        onLogin('member', 'guest');
+                    } else {
+                        setError(true);
+                        setInputPw("");
+                    }
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="fixed inset-0 bg-slate-50 flex items-center justify-center z-[9999]">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="spinner"></div>
+                            <p className="text-sm font-bold text-slate-500">보안 설정 불러오는 중...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="fixed inset-0 bg-slate-100 flex items-center justify-center z-[9999] p-4 font-sans">
+                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl p-8 border border-slate-200">
+                        <div className="flex flex-col items-center mb-8">
+                            <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4">
+                                <Lock className="w-7 h-7 font-bold" />
+                            </div>
+                            <h2 className="text-xl font-black text-slate-800">팀 접속 권한 확인</h2>
+                            <p className="text-sm text-slate-500 mt-2 font-bold text-center">
+                                관리자 암호 또는<br/>할당받은 팀원 암호를 입력하세요.
+                            </p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <input 
+                                    type="password" value={inputPw} onChange={(e) => { setInputPw(e.target.value); setError(false); }}
+                                    className={`w-full p-4 text-center text-lg tracking-widest font-black border-2 rounded-xl focus:outline-none transition-all placeholder:text-slate-300 ${error ? 'border-red-300 bg-red-50 focus:border-red-500' : 'border-slate-200 focus:border-indigo-500 bg-slate-50'}`}
+                                    placeholder="●●●●" autoFocus
+                                />
+                                {error && <p className="text-xs text-red-500 font-bold text-center mt-2 animate-pulse">암호가 일치하지 않습니다.</p>}
+                            </div>
+                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-transform active:scale-95">대시보드 입장</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
 
         // --- 서브 컴포넌트 ---
         const StatusButton = ({ status, onClick }) => {
@@ -152,7 +243,7 @@
             )
         }
 
-        const CurrencyCalculatorSidebar = ({ exchangeRate, onRateChange }) => {
+        const CurrencyCalculatorSidebar = ({ exchangeRate, onRateChange, userRole }) => {
             const [cny, setCny] = useState('');
             const krw = cny ? Math.round(cny * exchangeRate) : 0;
             return (
@@ -164,7 +255,11 @@
                     <div className="space-y-2 font-bold font-mono">
                         <div className="flex items-center justify-between text-[10px] text-indigo-600 mb-1 whitespace-nowrap font-sans font-black">
                             <span>적용 환율:</span>
-                            <input type="number" value={exchangeRate} onChange={(e) => onRateChange(Number(e.target.value))} className="w-16 text-right bg-white border border-indigo-200 rounded px-1 py-0.5 shadow-sm focus:ring-1 focus:ring-indigo-400 outline-none"/>
+                            {userRole === 'admin' ? (
+                                <input type="number" value={exchangeRate} onChange={(e) => onRateChange(Number(e.target.value))} className="w-16 text-right bg-white border border-indigo-200 rounded px-1 py-0.5 shadow-sm focus:ring-1 focus:ring-indigo-400 outline-none"/>
+                            ) : (
+                                <span className="w-16 text-right bg-gray-100 border border-gray-200 text-gray-500 rounded px-1 py-0.5 shadow-sm">{exchangeRate}</span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                             <input type="number" placeholder="위안" value={cny} onChange={(e) => setCny(e.target.value)} className="w-full text-sm p-2 rounded border border-indigo-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono font-bold" />
@@ -179,12 +274,16 @@
             )
         }
 
-        const SettingsModal = ({ currentCategories, currentCategoryFees, currentCategoryRatios, currentProjects, currentTeam, onClose, onSave }) => {
+        const SettingsModal = ({ currentCategories, currentCategoryFees, currentCategoryRatios, currentProjects, currentTeam, userRole, currentSecurity, onClose, onSave }) => {
             const [cats, setCats] = useState([...currentCategories]);
             const [fees, setFees] = useState({ ...currentCategoryFees });
             const [ratios, setRatios] = useState({ ...currentCategoryRatios });
             const [projs, setProjs] = useState([...currentProjects]);
             const [team, setTeam] = useState([...currentTeam]);
+            
+            // 보안 설정
+            const [masterPw, setMasterPw] = useState(currentSecurity?.master || DEFAULT_MASTER_PW);
+            const [memberPwMap, setMemberPwMap] = useState(currentSecurity?.memberPasswords || {});
 
             const moveItem = (list, setList, index, direction) => {
                 const newList = [...list];
@@ -192,6 +291,18 @@
                 if (newIndex < 0 || newIndex >= list.length) return;
                 [newList[index], newList[newIndex]] = [newList[newIndex], newList[index]];
                 setList(newList);
+            };
+
+            const handleMemberPwChange = (key, val) => {
+                setMemberPwMap(prev => ({ ...prev, [key]: val }));
+            };
+
+            const handleSave = () => {
+                onSave(cats, fees, ratios, projs, team, false, { master: masterPw, memberPasswords: memberPwMap });
+            };
+
+            const handleBatchSave = () => {
+                onSave(cats, fees, ratios, projs, team, true, { master: masterPw, memberPasswords: memberPwMap });
             };
 
             return (
@@ -202,6 +313,42 @@
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors font-bold font-black"><X className="w-6 h-6 font-bold"/></button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-10">
+                            {userRole === 'admin' && (
+                                <section className="bg-red-50 p-4 rounded-2xl border border-red-100">
+                                    <label className="text-xs font-black text-red-600 uppercase mb-2 block tracking-widest border-b border-red-200 pb-1 flex items-center gap-2"><Key className="w-3 h-3"/> 마스터 계정 설정</label>
+                                    <div className="flex items-center gap-4">
+                                        <label className="text-[10px] font-bold text-red-400 w-24">관리자 암호</label>
+                                        <input type="text" value={masterPw} onChange={(e) => setMasterPw(e.target.value)} className="flex-1 border border-red-200 rounded-lg p-2 text-sm font-black text-red-800 focus:ring-1 focus:ring-red-400 bg-white outline-none"/>
+                                    </div>
+                                </section>
+                            )}
+
+                            <section>
+                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1">팀원 및 암호 관리</label>
+                                <div className="space-y-2">
+                                    {team.map((m, i) => (
+                                        <div key={i} className="flex gap-2 group transition-all font-bold">
+                                            <input value={m.label} onChange={(e) => { const n = [...team]; n[i] = { ...m, label: e.target.value }; setTeam(n); }} className="flex-1 border rounded-lg p-2 text-sm font-black focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" placeholder="팀원 이름 (예: 김MD)"/>
+                                            {/* 팀원별 비밀번호 입력칸 */}
+                                            {userRole === 'admin' && (
+                                                <div className="flex items-center gap-1 w-40">
+                                                    <Key className="w-4 h-4 text-gray-300"/>
+                                                    <input 
+                                                        type="text" 
+                                                        value={memberPwMap[m.key] || ''} 
+                                                        onChange={(e) => handleMemberPwChange(m.key, e.target.value)}
+                                                        placeholder="접속 암호"
+                                                        className="w-full border rounded-lg p-2 text-sm font-mono text-gray-600 focus:ring-1 focus:ring-gray-400 bg-gray-50 outline-none"
+                                                    />
+                                                </div>
+                                            )}
+                                            <button onClick={() => setTeam(team.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => setTeam([...team, { key: `member_${Date.now()}`, label: "새 팀원" }])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black tracking-widest font-bold">+ 추가</button>
+                                </div>
+                            </section>
+
                             <section>
                                 <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">시즌 그룹 관리</label>
                                 <div className="space-y-2">
@@ -246,26 +393,14 @@
                                     <button onClick={() => setCats([...cats, "새 카테고리"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black font-bold">+ 추가</button>
                                 </div>
                             </section>
-                            <section>
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1">팀원 관리</label>
-                                <div className="space-y-2">
-                                    {team.map((m, i) => (
-                                        <div key={i} className="flex gap-2 group transition-all font-bold">
-                                            <input value={m.label} onChange={(e) => { const n = [...team]; n[i] = { ...m, label: e.target.value }; setTeam(n); }} className="flex-1 border rounded-lg p-2 text-sm font-black focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" />
-                                            <button onClick={() => setTeam(team.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => setTeam([...team, { key: `member_${Date.now()}`, label: "새 팀원" }])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black tracking-widest font-bold">+ 추가</button>
-                                </div>
-                            </section>
                         </div>
                         <div className="flex flex-col gap-3 mt-8 border-t pt-6 font-bold">
-                            <button onClick={() => onSave(cats, fees, ratios, projs, team, true)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm shadow-md hover:bg-amber-600 transition-all font-black flex items-center justify-center gap-2 font-bold">
+                            <button onClick={handleBatchSave} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm shadow-md hover:bg-amber-600 transition-all font-black flex items-center justify-center gap-2 font-bold">
                                 <RefreshCw className="w-4 h-4 font-bold" /> 현재 공식을 기존 상품들에 일괄 적용하여 재계산
                             </button>
                             <div className="flex gap-4">
                                 <button onClick={onClose} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-xs text-gray-500 hover:bg-gray-200 transition-all">취소</button>
-                                <button onClick={() => onSave(cats, fees, ratios, projs, team, false)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-black font-bold">설정만 저장</button>
+                                <button onClick={handleSave} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-black font-bold">설정 저장 (암호 포함)</button>
                             </div>
                         </div>
                     </div>
@@ -273,9 +408,109 @@
             );
         };
 
+        // --- 로그 모달 컴포넌트 ---
+        const LogModal = ({ logs, onClose }) => {
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-sans">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl flex flex-col h-[700px]">
+                        <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
+                            <h3 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                                <FileText className="w-6 h-6 text-indigo-600" /> 작업 활동 로그
+                            </h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-3">
+                            {logs.length === 0 ? (
+                                <div className="text-center text-gray-400 py-10 font-bold">기록된 활동이 없습니다.</div>
+                            ) : (
+                                logs.map((log) => (
+                                    <div key={log.id} className="flex gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100 text-sm">
+                                        <div className="flex-shrink-0 text-xs text-gray-400 w-24 pt-1 font-mono">
+                                            {new Date(log.timestamp).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-black uppercase ${log.userRole === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                    {log.userName || (log.userRole === 'admin' ? 'MASTER' : 'MEMBER')}
+                                                </span>
+                                                <span className="font-black text-gray-800">{log.action}</span>
+                                            </div>
+                                            <div className="text-gray-600 text-xs font-medium">{log.details}</div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 휴지통 모달 컴포넌트 ---
+        const TrashModal = ({ deletedProducts, onRestore, onDeleteForever, onClose }) => {
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-sans">
+                    <div className="bg-white rounded-2xl w-full max-w-4xl p-6 shadow-xl flex flex-col h-[700px]">
+                        <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
+                            <h3 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                                <Trash2 className="w-6 h-6 text-red-500" /> 휴지통 (삭제된 항목)
+                            </h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                            {deletedProducts.length === 0 ? (
+                                <div className="text-center text-gray-400 py-20 font-bold flex flex-col items-center gap-2">
+                                    <Trash2 className="w-10 h-10 opacity-30" />
+                                    휴지통이 비어있습니다.
+                                </div>
+                            ) : (
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 text-gray-500 border-b font-bold">
+                                        <tr>
+                                            <th className="px-4 py-3 w-20">이미지</th>
+                                            <th className="px-4 py-3">상품 정보</th>
+                                            <th className="px-4 py-3 text-right">삭제일시</th>
+                                            <th className="px-4 py-3 text-center w-40">관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {deletedProducts.map((item) => (
+                                            <tr key={item.firebaseId} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3">
+                                                    <div className="w-12 h-12 bg-gray-100 rounded border overflow-hidden">
+                                                        {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 m-auto mt-4 text-gray-300"/>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="font-black text-gray-800">{item.name}</div>
+                                                    <div className="text-xs text-gray-500">{item.project} / {item.category}</div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-xs text-gray-400">
+                                                    {new Date(item.updatedAt || Date.now()).toLocaleString()}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <div className="flex gap-2 justify-center">
+                                                        <button onClick={() => onRestore(item)} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-black hover:bg-green-200 transition-colors flex items-center gap-1">
+                                                            <RotateCcw className="w-3 h-3"/> 복원
+                                                        </button>
+                                                        <button onClick={() => onDeleteForever(item)} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-black hover:bg-red-200 transition-colors flex items-center gap-1">
+                                                            <X className="w-3 h-3"/> 영구삭제
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // --- 메인 App 컴포넌트 ---
-        function App({ firebaseSDK }) {
-            // SDK를 Props로 안전하게 받아서 사용 (getApps 추가)
+        function App({ firebaseSDK, userRole, userKey }) {
             const { getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch, initializeApp, getApps } = firebaseSDK;
 
             const [user, setUser] = useState(null);
@@ -283,10 +518,10 @@
             const [activeTab, setActiveTab] = useState("전체");
             const [activeProject, setActiveProject] = useState("전체");
             const [products, setProducts] = useState([]);
-            // [중요] 초기 렌더링 시 map 에러 방지를 위해 배열 초기값 보장
             const [settings, setSettings] = useState({ 
                 categories: [], categoryFees: {}, categoryRatios: {}, projects: [], teamMembers: [], exchangeRate: 195 
             });
+            const [security, setSecurity] = useState({ master: DEFAULT_MASTER_PW, memberPasswords: {} });
             const [searchTerm, setSearchTerm] = useState("");
             const [filterStatus, setFilterStatus] = useState("unconfirmed"); 
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -294,6 +529,9 @@
             const [editingItem, setEditingItem] = useState(null); 
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
+            const [isLogModalOpen, setIsLogModalOpen] = useState(false); 
+            const [isTrashModalOpen, setIsTrashModalOpen] = useState(false); 
+            const [logs, setLogs] = useState([]); 
             const [memoTarget, setMemoTarget] = useState({ id: null, content: '', category: null });
             const [previewImage, setPreviewImage] = useState(null);
             const [productForm, setProductForm] = useState({ 
@@ -303,7 +541,7 @@
             });
             const [lastTargetZone, setLastTargetZone] = useState('main');
 
-            // Firebase 초기화 (useMemo로 1회만 실행 보장 + 중복 init 방지)
+            // Firebase 초기화
             const { auth, db, appId } = useMemo(() => {
                 const firebaseConfig = {
                     apiKey: "AIzaSyBCitvHwUFoRoRqTm-7lL-914T8tmHZYHE",
@@ -313,82 +551,89 @@
                     messagingSenderId: "544793341133",
                     appId: "1:544793341133:web:cafc1766980b6322cd4d84"
                 };
-                
-                // [수정] 앱이 이미 초기화되었는지 확인
                 let app;
-                if (!getApps().length) {
-                    app = initializeApp(firebaseConfig);
-                } else {
-                    app = getApps()[0]; // 이미 존재하는 앱 사용
-                }
-                
-                return {
-                    auth: getAuth(app),
-                    db: getFirestore(app),
-                    appId: typeof __app_id !== 'undefined' ? __app_id : 'sourcing-app-v2'
-                };
+                if (!getApps().length) { app = initializeApp(firebaseConfig); } else { app = getApps()[0]; }
+                return { auth: getAuth(app), db: getFirestore(app), appId: typeof __app_id !== 'undefined' ? __app_id : 'sourcing-app-v2' };
             }, []);
 
-            // 인증 로직
+            // 사용자 이름 찾기 Helper
+            const getUserName = () => {
+                if (userRole === 'admin') return '관리자';
+                if (userKey) {
+                    const member = settings.teamMembers.find(m => m.key === userKey);
+                    return member ? member.label : '팀원';
+                }
+                return '알 수 없음';
+            };
+
+            // 로그 기록 함수
+            const logAction = async (action, details) => {
+                if (!user) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                        timestamp: Date.now(),
+                        action,
+                        details,
+                        userRole: userRole || 'unknown',
+                        userName: getUserName(),
+                        userId: user.uid
+                    });
+                } catch (e) { console.error("Log error", e); }
+            };
+
+            // 인증 및 데이터 구독
             useEffect(() => {
                 const initAuthWithRetry = async (retryCount = 0) => {
-                    try {
-                        const result = await signInAnonymously(auth);
-                        setUser(result.user);
-                        setAuthError(null);
-                    } catch (e) {
-                        console.error(`인증 실패:`, e);
-                        if (retryCount < 5) setTimeout(() => initAuthWithRetry(retryCount + 1), 1000);
-                        else setAuthError(`인증 에러: ${e.message}`);
-                    }
+                    try { await signInAnonymously(auth); setUser(auth.currentUser); } catch (e) { if (retryCount < 5) setTimeout(() => initAuthWithRetry(retryCount + 1), 1000); }
                 };
                 initAuthWithRetry();
                 const unsubscribe = onAuthStateChanged(auth, (u) => { if (u) setUser(u); });
                 return () => unsubscribe();
             }, [auth]);
 
-            // 데이터 구독 로직
             useEffect(() => {
                 if (!user) return;
                 const prodRef = collection(db, 'artifacts', appId, 'public', 'data', 'products');
                 const unsubProds = onSnapshot(prodRef, (snapshot) => {
-                    const list = snapshot.docs.map(doc => {
+                    setProducts(snapshot.docs.map(doc => {
                         const data = doc.data();
                         if (data.link && !data.links) data.links = [data.link];
                         if (data.naverLink && !data.naverLinks) data.naverLinks = [data.naverLink];
                         return { ...data, firebaseId: doc.id };
-                    });
-                    setProducts(list);
+                    }));
                 });
+                
                 const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
                 const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
-                        // [수정] 안전한 데이터 로딩: DB 필드가 누락되어도 앱이 죽지 않도록 기본값 할당
                         setSettings({ 
-                            categories: data.categories || [], 
-                            categoryFees: data.categoryFees || {}, 
-                            categoryRatios: data.categoryRatios || {}, 
-                            projects: data.projects || [], 
-                            teamMembers: data.teamMembers || [], 
-                            exchangeRate: data.exchangeRate || 195 
+                            categories: data.categories || [], categoryFees: data.categoryFees || {}, categoryRatios: data.categoryRatios || {}, 
+                            projects: data.projects || [], teamMembers: data.teamMembers || [], exchangeRate: data.exchangeRate || 195 
                         });
                     } else {
-                        const initSet = { 
-                            categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩"], 
-                            categoryFees: {"아쿠아슈즈": 5000, "스노쿨링마스크": 8000},
-                            categoryRatios: {"아쿠아슈즈": 1.0, "스노쿨링마스크": 1.0},
-                            projects: ["2024 여름"],
-                            teamMembers: [{key: 'ceo', label: '사장님'}], 
-                            exchangeRate: 195 
-                        };
-                        setDoc(settingsRef, initSet);
+                        setDoc(settingsRef, { 
+                            categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩"], categoryFees: {"아쿠아슈즈": 5000, "스노쿨링마스크": 8000}, categoryRatios: {"아쿠아슈즈": 1.0, "스노쿨링마스크": 1.0},
+                            projects: ["2024 여름"], teamMembers: [{key: 'ceo', label: '사장님'}], exchangeRate: 195 
+                        });
                     }
                 });
-                return () => { unsubProds(); unsubSettings(); };
+                const securityRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security');
+                const unsubSecurity = onSnapshot(securityRef, (snapshot) => {
+                    if (snapshot.exists()) { setSecurity(snapshot.data()); }
+                });
+
+                const logRef = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
+                const unsubLogs = onSnapshot(logRef, (snapshot) => {
+                    const loadedLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    loadedLogs.sort((a, b) => b.timestamp - a.timestamp);
+                    setLogs(loadedLogs);
+                });
+
+                return () => { unsubProds(); unsubSettings(); unsubSecurity(); unsubLogs(); };
             }, [user, db, appId]);
 
-            // Paste 기능
+            // Paste Event
             useEffect(() => {
                 const handlePaste = (e) => {
                     if (!isAddModalOpen) return;
@@ -411,7 +656,7 @@
             }, [isAddModalOpen, lastTargetZone]);
 
             const filteredProducts = useMemo(() => {
-                let list = products;
+                let list = products.filter(p => !p.isDeleted); // 삭제되지 않은 것만
                 if (activeProject !== "전체") list = list.filter(p => p.project === activeProject);
                 if (activeTab !== "전체") list = list.filter(p => p.category === activeTab);
                 if (searchTerm) {
@@ -425,9 +670,13 @@
                 return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
             }, [products, activeProject, activeTab, searchTerm, filterStatus]);
 
+            const deletedProducts = useMemo(() => {
+                return products.filter(p => p.isDeleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            }, [products]);
+
             const activeCategoryCounts = useMemo(() => {
                 const counts = {};
-                products.forEach(p => {
+                products.filter(p => !p.isDeleted).forEach(p => { 
                     const isSameProject = activeProject === "전체" || p.project === activeProject;
                     if (isSameProject && !p.isConfirmed && !p.isHeld) {
                         counts[p.category] = (counts[p.category] || 0) + 1;
@@ -437,27 +686,18 @@
             }, [products, activeProject]);
 
             const handleAddOrUpdateProduct = async (e) => {
-                e.preventDefault();
-                if (!user) return;
+                e.preventDefault(); if (!user) return;
                 try {
                     const cleanLinks = productForm.links.filter(l => l.trim() !== '');
                     const cleanNaverLinks = productForm.naverLinks.filter(l => l.trim() !== '');
-                    const payload = {
-                        ...productForm,
-                        links: cleanLinks,
-                        naverLinks: cleanNaverLinks,
-                        cost: Number(productForm.cost),
-                        price: Number(productForm.price),
-                        updatedAt: Date.now()
-                    };
-                    if (editingItem) {
-                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload);
-                    } else {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), {
-                            ...payload,
-                            id: Date.now(), createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleOrdered: false,
-                            approvals: settings.teamMembers.reduce((acc, m) => ({...acc, [m.key]: 'pending'}), {})
-                        });
+                    const payload = { ...productForm, links: cleanLinks, naverLinks: cleanNaverLinks, cost: Number(productForm.cost), price: Number(productForm.price), updatedAt: Date.now() };
+                    
+                    if (editingItem) { 
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload); 
+                        logAction("상품 수정", `[${payload.project}/${payload.category}] ${payload.name} (${payload.option || '옵션없음'})`);
+                    } else { 
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, id: Date.now(), createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleOrdered: false, isDeleted: false, approvals: settings.teamMembers.reduce((acc, m) => ({...acc, [m.key]: 'pending'}), {}) }); 
+                        logAction("신규 등록", `[${payload.project}/${payload.category}] ${payload.name} (${payload.option || '옵션없음'})`);
                     }
                     setIsAddModalOpen(false);
                 } catch (err) { alert("저장 실패: " + err.message); }
@@ -471,105 +711,94 @@
                     const marginRate = p.price ? ((margin / p.price) * 100).toFixed(1) + "%" : "0%";
                     let st = p.isConfirmed ? "확정" : (p.isHeld ? "보류" : "진행중");
                     return [
-                        idx + 1, p.project || "미지정", p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`,
-                        `"${(p.option || "").replace(/"/g, '""')}"`, p.cost, p.price, margin, marginRate,
-                        `"${(p.links || []).join(' | ')}"`, `"${(p.naverLinks || []).join(' | ')}"`, `"${(p.memo || "").replace(/"/g, '""')}"`
+                        idx + 1, p.project || "미지정", p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`, `"${(p.option || "").replace(/"/g, '""')}"`, p.cost, p.price, margin, marginRate, `"${(p.links || []).join(' | ')}"`, `"${(p.naverLinks || []).join(' | ')}"`, `"${(p.memo || "").replace(/"/g, '""')}"`
                     ].join(",");
                 });
-                const csvContent = "\uFEFF" + [headers, ...rows].join("\n");
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
+                const blob = new Blob(["\uFEFF" + [headers, ...rows].join("\n")], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
-                link.setAttribute("href", url);
+                link.setAttribute("href", URL.createObjectURL(blob));
                 link.setAttribute("download", `소싱대시보드_출력.csv`);
                 link.click();
             };
 
-            const handleCnyChange = (val) => {
-                const categoryFee = settings.categoryFees[productForm.category] || 0;
-                const categoryRatio = settings.categoryRatios[productForm.category] || 1.0;
-                const cost = val ? Math.round(val * settings.exchangeRate * categoryRatio) + categoryFee : '';
-                setProductForm(prev => ({ ...prev, cny: val, cost: cost }));
+            const handleCnyChange = (val) => { const categoryFee = settings.categoryFees[productForm.category] || 0; const categoryRatio = settings.categoryRatios[productForm.category] || 1.0; const cost = val ? Math.round(val * settings.exchangeRate * categoryRatio) + categoryFee : ''; setProductForm(prev => ({ ...prev, cny: val, cost: cost })); };
+            const handleCategoryChangeInForm = (cat) => { const categoryFee = settings.categoryFees[cat] || 0; const categoryRatio = settings.categoryRatios[cat] || 1.0; const newCost = productForm.cny ? Math.round(productForm.cny * settings.exchangeRate * categoryRatio) + categoryFee : productForm.cost; setProductForm(prev => ({ ...prev, category: cat, cost: newCost })); };
+            const handleLinkChange = (type, index, value) => { const field = type === '1688' ? 'links' : 'naverLinks'; const newList = [...productForm[field]]; newList[index] = value; setProductForm(prev => ({ ...prev, [field]: newList })); };
+            const addLinkField = (type) => { const field = type === '1688' ? 'links' : 'naverLinks'; setProductForm(prev => ({ ...prev, [field]: [...prev[field], ''] })); };
+            const removeLinkField = (type, index) => { const field = type === '1688' ? 'links' : 'naverLinks'; if (productForm[field].length <= 1) return; const newList = productForm[field].filter((_, i) => i !== index); setProductForm(prev => ({ ...prev, [field]: newList })); };
+            
+            const toggleStatus = async (item, memberKey) => { 
+                if (!user) return; 
+                const next = (item.approvals[memberKey] || 'pending') === 'approved' ? 'rejected' : ((item.approvals[memberKey] === 'rejected') ? 'pending' : 'approved'); 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { approvals: { ...item.approvals, [memberKey]: next } }); 
+                const memberName = settings.teamMembers.find(m => m.key === memberKey)?.label || memberKey;
+                logAction("결재 상태 변경", `[${item.name}] ${memberName}: ${next === 'approved' ? '승인' : next === 'rejected' ? '반려' : '대기'} 처리`);
+            };
+            const toggleConfirm = async (item) => { 
+                if (!user) return; 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isConfirmed: !item.isConfirmed, isHeld: false }); 
+                logAction("확정 상태 변경", `[${item.name}] ${!item.isConfirmed ? '최종 확정' : '확정 취소'}`);
+            };
+            const toggleHold = async (item) => { 
+                if (!user) return; 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isHeld: !item.isHeld, isConfirmed: false }); 
+                logAction("보류 상태 변경", `[${item.name}] ${!item.isHeld ? '보류 설정' : '보류 해제'}`);
+            };
+            const toggleSample = async (item) => { 
+                if (!user) return; 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isSampleOrdered: !item.isSampleOrdered }); 
+                logAction("샘플 상태 변경", `[${item.name}] ${!item.isSampleOrdered ? '샘플 신청완료' : '샘플 신청취소'}`);
+            };
+            
+            const deleteItem = async (item) => { 
+                if (!user) return; 
+                if (window.confirm("휴지통으로 이동하시겠습니까?")) { 
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: true, updatedAt: Date.now() }); 
+                    logAction("휴지통 이동", `[${item.name}] 휴지통으로 이동됨`);
+                } 
             };
 
-            const handleCategoryChangeInForm = (cat) => {
-                const categoryFee = settings.categoryFees[cat] || 0;
-                const categoryRatio = settings.categoryRatios[cat] || 1.0;
-                const newCost = productForm.cny ? Math.round(productForm.cny * settings.exchangeRate * categoryRatio) + categoryFee : productForm.cost;
-                setProductForm(prev => ({ ...prev, category: cat, cost: newCost }));
+            const restoreItem = async (item) => {
+                if (!user) return;
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: false, updatedAt: Date.now() });
+                logAction("상품 복원", `[${item.name}] 휴지통에서 복원됨`);
             };
 
-            const handleLinkChange = (type, index, value) => {
-                const field = type === '1688' ? 'links' : 'naverLinks';
-                const newList = [...productForm[field]];
-                newList[index] = value;
-                setProductForm(prev => ({ ...prev, [field]: newList }));
-            };
-            const addLinkField = (type) => {
-                const field = type === '1688' ? 'links' : 'naverLinks';
-                setProductForm(prev => ({ ...prev, [field]: [...prev[field], ''] }));
-            };
-            const removeLinkField = (type, index) => {
-                const field = type === '1688' ? 'links' : 'naverLinks';
-                if (productForm[field].length <= 1) return;
-                const newList = productForm[field].filter((_, i) => i !== index);
-                setProductForm(prev => ({ ...prev, [field]: newList }));
-            };
-            const toggleStatus = async (item, memberKey) => {
+            const deleteForever = async (item) => {
                 if (!user) return;
-                const next = (item.approvals[memberKey] || 'pending') === 'approved' ? 'rejected' : ((item.approvals[memberKey] === 'rejected') ? 'pending' : 'approved');
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { approvals: { ...item.approvals, [memberKey]: next } });
-            };
-            const toggleConfirm = async (item) => {
-                if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isConfirmed: !item.isConfirmed, isHeld: false });
-            };
-            const toggleHold = async (item) => {
-                if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isHeld: !item.isHeld, isConfirmed: false });
-            };
-            const toggleSample = async (item) => {
-                if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isSampleOrdered: !item.isSampleOrdered });
-            };
-            const deleteItem = async (item) => {
-                if (!user) return;
-                if (window.confirm("이 상품 데이터를 삭제하시겠습니까?")) {
+                if (window.confirm("정말로 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId));
+                    logAction("영구 삭제", `[${item.name}] 영구적으로 삭제됨`);
                 }
             };
-            const saveExchangeRate = async (rate) => {
-                if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { exchangeRate: rate });
+
+            const saveExchangeRate = async (rate) => { 
+                if (!user) return; 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { exchangeRate: rate }); 
+                logAction("환율 변경", `적용 환율 변경: ${rate}`);
             };
-            const saveMemo = async () => {
-                if (!user) return;
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', memoTarget.id), { memo: memoTarget.content });
-                setIsMemoModalOpen(false);
+            const saveMemo = async () => { 
+                if (!user) return; 
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', memoTarget.id), { memo: memoTarget.content }); 
+                setIsMemoModalOpen(false); 
             };
-            const saveSettingsBatch = async (newCategories, newCategoryFees, newCategoryRatios, newProjects, newTeam, bulkApply = false) => {
+            const saveSettingsBatch = async (newCategories, newCategoryFees, newCategoryRatios, newProjects, newTeam, bulkApply, newSecurity) => {
                 if (!user) return;
                 try {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { 
-                        categories: newCategories, categoryFees: newCategoryFees, categoryRatios: newCategoryRatios,
-                        projects: newProjects, teamMembers: newTeam 
-                    });
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { categories: newCategories, categoryFees: newCategoryFees, categoryRatios: newCategoryRatios, projects: newProjects, teamMembers: newTeam });
+                    
+                    // [추가] 보안 설정 함께 저장
+                    if (newSecurity) {
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security'), newSecurity);
+                    }
+
+                    logAction("시스템 설정 변경", "설정 및 암호 업데이트됨");
                     if (bulkApply) {
-                        const batch = writeBatch(db);
-                        let updateCount = 0;
-                        products.forEach(p => {
-                            if (p.cny) {
-                                const ratio = newCategoryRatios[p.category] || 1.0;
-                                const fee = newCategoryFees[p.category] || 0;
-                                const newCost = Math.round(p.cny * settings.exchangeRate * ratio) + fee;
-                                if (p.cost !== newCost) {
-                                    batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'products', p.firebaseId), { cost: newCost });
-                                    updateCount++;
-                                }
-                            }
-                        });
-                        if (updateCount > 0) await batch.commit();
+                        const batch = writeBatch(db); let updateCount = 0;
+                        products.forEach(p => { if (p.cny) { const ratio = newCategoryRatios[p.category] || 1.0; const fee = newCategoryFees[p.category] || 0; const newCost = Math.round(p.cny * settings.exchangeRate * ratio) + fee; if (p.cost !== newCost) { batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'products', p.firebaseId), { cost: newCost }); updateCount++; } } });
+                        if (updateCount > 0) await batch.commit(); 
                         alert(`일괄 적용 완료: ${updateCount}개 상품`);
+                        logAction("원가 일괄 재계산", `${updateCount}개 상품 원가 업데이트 완료`);
                     }
                     setIsSettingsOpen(false);
                 } catch (err) { alert("설정 저장 실패: " + err.message); }
@@ -582,9 +811,15 @@
                             <h1 className="text-xl font-black flex items-center gap-2 whitespace-nowrap tracking-tighter">
                                 <Package className="w-6 h-6 flex-shrink-0 font-bold" /> 소싱 관리 보드
                             </h1>
-                            <p className="text-[10px] opacity-70 mt-1 uppercase tracking-widest flex items-center gap-1">
-                                <Cloud className="w-3 h-3 flex-shrink-0"/> {user ? '데이터 서버 연결됨' : '연결 시도 중...'}
-                            </p>
+                            <div className="flex items-center justify-between mt-1 opacity-80">
+                                <p className="text-[10px] uppercase tracking-widest flex items-center gap-1">
+                                    <Cloud className="w-3 h-3 flex-shrink-0"/> {user ? '데이터 서버 연결됨' : '연결 시도 중...'}
+                                </p>
+                                {userRole === 'admin' ? 
+                                    <span className="text-[9px] bg-indigo-700 px-1.5 py-0.5 rounded text-indigo-100 flex items-center gap-1"><Shield className="w-2.5 h-2.5"/> MASTER</span> :
+                                    <span className="text-[9px] bg-indigo-500/50 px-1.5 py-0.5 rounded text-white flex items-center gap-1"><User className="w-2.5 h-2.5"/> {getUserName()}</span>
+                                }
+                            </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
                             <div className="px-3">
@@ -596,6 +831,8 @@
                                     {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
                                 </select>
                             </div>
+                            
+                            {/* ... 기존 사이드바 필터 메뉴들 ... */}
                             <div>
                                 <div className="px-3 mb-2 text-xs font-black text-gray-400 uppercase flex items-center gap-2">
                                     <LayoutDashboard className="w-3 h-3 flex-shrink-0" /> 소싱 진행 목록
@@ -603,7 +840,7 @@
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('unconfirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center whitespace-nowrap transition-all ${activeTab === "전체" && filterStatus === 'unconfirmed' ? "bg-indigo-100 text-indigo-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
                                         <span>전체 보기</span>
-                                        <span className="bg-indigo-200 text-indigo-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && !p.isConfirmed && !p.isHeld).length}</span>
+                                        <span className="bg-indigo-200 text-indigo-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && !p.isConfirmed && !p.isHeld && !p.isDeleted).length}</span>
                                     </button>
                                     {settings.categories.map(cat => (
                                         activeCategoryCounts[cat] > 0 && (
@@ -622,7 +859,7 @@
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('sample_ordered'); }} className={`w-full text-left px-4 py-2 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'sample_ordered' ? "bg-purple-100 text-purple-800 shadow-sm font-black" : "text-gray-600 hover:bg-gray-100"}`}>
                                         <span>신청 완료</span>
-                                        <span className="text-xs font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isSampleOrdered).length}</span>
+                                        <span className="text-xs font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isSampleOrdered && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -633,7 +870,7 @@
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('confirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${activeTab === "전체" && filterStatus === 'confirmed' ? "bg-green-100 text-green-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
                                         <span>확정 건 전체</span>
-                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isConfirmed).length}</span>
+                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isConfirmed && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -644,15 +881,33 @@
                                 <div className="space-y-1">
                                     <button onClick={() => { setActiveTab("전체"); setFilterStatus('held'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'held' ? "bg-amber-100 text-amber-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
                                         <span>보류 중인 상품</span>
-                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isHeld && !p.isConfirmed).length}</span>
+                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isHeld && !p.isConfirmed && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
-                            <CurrencyCalculatorSidebar exchangeRate={settings.exchangeRate} onRateChange={saveExchangeRate} />
+                            
+                            <CurrencyCalculatorSidebar exchangeRate={settings.exchangeRate} onRateChange={saveExchangeRate} userRole={userRole} />
+                            
+                            {/* 로그 보기 버튼 - 관리자만 표시 */}
+                            {userRole === 'admin' && (
+                                <button onClick={() => setIsLogModalOpen(true)} className="w-full bg-white border border-gray-200 p-3 rounded-xl flex items-center justify-center gap-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-indigo-600 transition-all font-bold">
+                                    <FileText className="w-4 h-4" /> 📋 작업 활동 로그
+                                </button>
+                            )}
+
+                            {/* [추가] 휴지통 버튼 */}
+                            <button onClick={() => setIsTrashModalOpen(true)} className="w-full bg-red-50 border border-red-100 p-3 rounded-xl flex items-center justify-between text-sm text-red-600 hover:bg-red-100 transition-all font-bold">
+                                <span className="flex items-center gap-2"><Trash2 className="w-4 h-4"/> 🗑️ 휴지통</span>
+                                <span className="bg-red-200 text-red-800 text-xs py-0.5 px-2 rounded-full font-mono">{deletedProducts.length}</span>
+                            </button>
                         </div>
                         <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0 font-bold text-[10px]">
                             <span className="text-gray-400">ID: {user?.uid.slice(0, 8) || '...'}</span>
-                            <button onClick={() => setIsSettingsOpen(true)} className="text-gray-500 hover:text-indigo-600 flex items-center gap-1"><Settings className="w-4 h-4" /> 시스템 설정</button>
+                            {userRole === 'admin' ? (
+                                <button onClick={() => setIsSettingsOpen(true)} className="text-gray-500 hover:text-indigo-600 flex items-center gap-1"><Settings className="w-4 h-4" /> 시스템 설정</button>
+                            ) : (
+                                <span className="text-gray-300 flex items-center gap-1 cursor-not-allowed"><Lock className="w-3 h-3"/> 설정 잠김</span>
+                            )}
                         </div>
                     </div>
                     
@@ -672,7 +927,9 @@
                                     <input type="text" placeholder="통합 검색..." className="pl-9 pr-4 py-2 bg-gray-100 border-none rounded-lg text-sm w-48 focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
                                 <button onClick={handleExportCSV} className="bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-black flex items-center gap-2 hover:bg-gray-50 shadow-sm transition-colors font-bold"><Download className="w-4 h-4"/>출력</button>
-                                <button onClick={() => { setEditingItem(null); setProductForm({project: activeProject === "전체" ? settings.projects[0] : activeProject, category: activeTab === "전체" ? settings.categories[0] : activeTab, name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: ['']}); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all flex-shrink-0 font-black font-bold"><Plus className="w-4 h-4 font-bold"/>신규 등록</button>
+                                {userRole === 'admin' && (
+                                    <button onClick={() => { setEditingItem(null); setProductForm({project: activeProject === "전체" ? settings.projects[0] : activeProject, category: activeTab === "전체" ? settings.categories[0] : activeTab, name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: ['']}); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all flex-shrink-0 font-black font-bold"><Plus className="w-4 h-4 font-bold"/>신규 등록</button>
+                                )}
                             </div>
                         </header>
                         <main className="flex-1 overflow-auto p-6 bg-gray-50 custom-scrollbar text-slate-700 font-bold">
@@ -688,7 +945,9 @@
                                                 <th className="px-6 py-4 text-right text-[11px] font-black uppercase font-bold font-black font-bold">판매가</th>
                                                 <th className="px-6 py-4 text-right text-[11px] font-black uppercase font-bold font-black font-bold">마진</th>
                                                 {settings.teamMembers.map(m => <th key={m.key} className="px-4 py-4 text-center w-20 text-[11px] font-black uppercase font-bold">{m.label}</th>)}
-                                                <th className="px-6 py-4 text-center w-40 text-[11px] uppercase font-bold font-black">관리</th>
+                                                {userRole === 'admin' && (
+                                                    <th className="px-6 py-4 text-center w-40 text-[11px] uppercase font-bold font-black">관리</th>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 font-bold font-black font-bold">
@@ -735,26 +994,28 @@
                                                             <div className={`text-[10px] font-black font-mono tracking-tighter ${marginValue < 0 ? 'text-red-400' : 'text-gray-400'}`}>({marginPercent}%)</div>
                                                         </td>
                                                         {settings.teamMembers.map(m => (<td key={m.key} className="px-4 py-4 text-center font-bold"><StatusButton status={item.approvals?.[m.key] || 'pending'} onClick={() => toggleStatus(item, m.key)} /></td>))}
-                                                        <td className="px-6 py-4 font-bold font-black">
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <div className="flex gap-1 font-bold font-black">
-                                                                    <button onClick={() => toggleHold(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isHeld ? 'bg-amber-500 text-white shadow-md font-bold' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
-                                                                        <Clock className="w-3 h-3 font-bold"/> {item.isHeld ? '해제' : '보류'}
+                                                        {userRole === 'admin' && (
+                                                            <td className="px-6 py-4 font-bold font-black">
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <div className="flex gap-1 font-bold font-black">
+                                                                        <button onClick={() => toggleHold(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isHeld ? 'bg-amber-500 text-white shadow-md font-bold' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                                                                            <Clock className="w-3 h-3 font-bold"/> {item.isHeld ? '해제' : '보류'}
+                                                                        </button>
+                                                                        <button onClick={() => toggleConfirm(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 border border-gray-200 font-bold font-black'}`}>
+                                                                            <CheckCircle className="w-3 h-3 font-bold"/> {item.isConfirmed ? '취소' : '확정'}
+                                                                        </button>
+                                                                    </div>
+                                                                    <button onClick={() => toggleSample(item)} className={`py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isSampleOrdered ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+                                                                        <Truck className="w-3 h-3 font-bold"/> 샘플신청
                                                                     </button>
-                                                                    <button onClick={() => toggleConfirm(item)} className={`flex-1 py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 border border-gray-200 font-bold font-black'}`}>
-                                                                        <CheckCircle className="w-3 h-3 font-bold"/> {item.isConfirmed ? '취소' : '확정'}
-                                                                    </button>
+                                                                    <div className="flex justify-center gap-2 mt-0.5 font-bold">
+                                                                        <button onClick={() => { setMemoTarget({id: item.firebaseId, content: item.memo || ''}); setIsMemoModalOpen(true); }} className={`p-1.5 rounded hover:bg-amber-50 transition-colors ${item.memo ? 'text-amber-500' : 'text-gray-300'}`} title="메모"><StickyNote className="w-4 h-4"/></button>
+                                                                        <button onClick={() => { setEditingItem(item); setProductForm({...item, links: item.links || [''], naverLinks: item.naverLinks || ['']}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors font-bold"><Edit2 className="w-4 h-4 font-bold"/></button>
+                                                                        <button onClick={() => deleteItem(item)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors font-bold font-black"><Trash2 className="w-4 h-4 font-bold"/></button>
+                                                                    </div>
                                                                 </div>
-                                                                <button onClick={() => toggleSample(item)} className={`py-1.5 rounded text-[10px] font-black flex items-center justify-center gap-1 transition-all ${item.isSampleOrdered ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
-                                                                    <Truck className="w-3 h-3 font-bold"/> 샘플신청
-                                                                </button>
-                                                                <div className="flex justify-center gap-2 mt-0.5 font-bold">
-                                                                    <button onClick={() => { setMemoTarget({id: item.firebaseId, content: item.memo || ''}); setIsMemoModalOpen(true); }} className={`p-1.5 rounded hover:bg-amber-50 transition-colors ${item.memo ? 'text-amber-500' : 'text-gray-300'}`} title="메모"><StickyNote className="w-4 h-4"/></button>
-                                                                    <button onClick={() => { setEditingItem(item); setProductForm({...item, links: item.links || [''], naverLinks: item.naverLinks || ['']}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors font-bold"><Edit2 className="w-4 h-4 font-bold"/></button>
-                                                                    <button onClick={() => deleteItem(item)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors font-bold font-black"><Trash2 className="w-4 h-4 font-bold"/></button>
-                                                                </div>
-                                                            </div>
-                                                        </td>
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 );
                                             })}
@@ -889,9 +1150,22 @@
                             currentCategoryFees={settings.categoryFees}
                             currentCategoryRatios={settings.categoryRatios}
                             currentProjects={settings.projects}
-                            currentTeam={settings.teamMembers} 
+                            currentTeam={settings.teamMembers}
+                            userRole={userRole}
+                            currentSecurity={security}
                             onClose={() => setIsSettingsOpen(false)} 
                             onSave={saveSettingsBatch}
+                        />
+                    )}
+                    {isLogModalOpen && (
+                        <LogModal logs={logs} onClose={() => setIsLogModalOpen(false)} />
+                    )}
+                    {isTrashModalOpen && (
+                        <TrashModal 
+                            deletedProducts={deletedProducts} 
+                            onRestore={restoreItem} 
+                            onDeleteForever={deleteForever} 
+                            onClose={() => setIsTrashModalOpen(false)} 
                         />
                     )}
                     {previewImage && (
@@ -919,30 +1193,34 @@
         // --- 부팅 로더 (Launcher) ---
         function Launcher() {
             const [isReady, setIsReady] = useState(false);
+            const [isLoggedIn, setIsLoggedIn] = useState(false);
+            const [userRole, setUserRole] = useState(null); 
+            const [userKey, setUserKey] = useState(null);
             
             useEffect(() => {
-                // 이미 준비되었는지 체크
-                if (window.isFirebaseReady && window.FirebaseSDK) {
-                    setIsReady(true);
-                } else {
-                    // 이벤트 리스너 등록
+                const sessionRole = sessionStorage.getItem('team_role');
+                const sessionKey = sessionStorage.getItem('team_user_key');
+                if (sessionRole) { 
+                    setUserRole(sessionRole); 
+                    setUserKey(sessionKey);
+                    setIsLoggedIn(true); 
+                }
+                if (window.isFirebaseReady && window.FirebaseSDK) { setIsReady(true); } 
+                else {
                     const handler = () => setIsReady(true);
                     window.addEventListener('firebase-ready', handler);
-                    
-                    // 폴백: 0.1초마다 체크 (이벤트 놓쳤을 경우 대비)
-                    const interval = setInterval(() => {
-                        if (window.FirebaseSDK) {
-                            setIsReady(true);
-                            clearInterval(interval);
-                        }
-                    }, 100);
-                    
-                    return () => {
-                        window.removeEventListener('firebase-ready', handler);
-                        clearInterval(interval);
-                    };
+                    const interval = setInterval(() => { if (window.FirebaseSDK) { setIsReady(true); clearInterval(interval); } }, 100);
+                    return () => { window.removeEventListener('firebase-ready', handler); clearInterval(interval); };
                 }
             }, []);
+
+            const handleLoginSuccess = (role, key) => { 
+                sessionStorage.setItem('team_role', role); 
+                if (key) sessionStorage.setItem('team_user_key', key);
+                setUserRole(role); 
+                setUserKey(key);
+                setIsLoggedIn(true); 
+            };
 
             if (!isReady) {
                 return (
@@ -953,15 +1231,15 @@
                 );
             }
 
-            // [수정] App을 ErrorBoundary로 감싸서 렌더링 에러가 발생해도 흰 화면이 뜨지 않게 함
+            if (!isLoggedIn) { return <LoginScreen onLogin={handleLoginSuccess} firebaseSDK={window.FirebaseSDK} />; }
+
             return (
                 <ErrorBoundary>
-                    <App firebaseSDK={window.FirebaseSDK} />
+                    <App firebaseSDK={window.FirebaseSDK} userRole={userRole} userKey={userKey} />
                 </ErrorBoundary>
             );
         }
 
-        // 앱 실행
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<Launcher />);
     </script>
