@@ -44,13 +44,12 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-        // 전역 객체에 할당 (getApps 추가)
+        // 전역 객체에 할당
         window.FirebaseSDK = { initializeApp, getApps, getApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch };
         
         // 로딩 완료 플래그 설정 및 이벤트 발송
         window.isFirebaseReady = true;
         window.dispatchEvent(new Event('firebase-ready'));
-        console.log("Firebase SDK Loaded");
     </script>
 </head>
 <body class="bg-gray-50 text-slate-800 font-sans font-medium text-slate-700">
@@ -62,6 +61,7 @@
 
         // [기본 설정] DB에 설정이 없을 때 사용할 초기 비밀번호
         const DEFAULT_MASTER_PW = "1234";
+        const DEFAULT_MEMBER_PW = "5678";
 
         // --- 아이콘 컴포넌트 ---
         const IconBase = ({ children, className, ...props }) => (
@@ -78,7 +78,7 @@
             ImageIcon: (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></IconBase>,
             Trash2: (props) => <IconBase {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></IconBase>,
             Plus: (props) => <IconBase {...props}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>,
-            Settings: (props) => <IconBase {...props}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>,
+            Settings: (props) => <IconBase {...props}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>,
             Edit2: (props) => <IconBase {...props}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></IconBase>,
             StickyNote: (props) => <IconBase {...props}><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></IconBase>,
             ChevronRight: (props) => <IconBase {...props}><path d="m9 18 6-6-6-6"/></IconBase>,
@@ -100,11 +100,13 @@
             Key: (props) => <IconBase {...props}><path d="m21 2-2 2m-7.6 7.6a6 6 0 1 1-8.4-8.4 6 6 0 0 1 8.4 8.4Zm5.2.5 2-2a2 2 0 0 0 2.8 2.8l-5-5"/><path d="m15 15 3 3"/></IconBase>,
             FileText: (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></IconBase>,
             RotateCcw: (props) => <IconBase {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></IconBase>,
+            Layers: (props) => <IconBase {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></IconBase>,
+            FolderTree: (props) => <IconBase {...props}><path d="M20 10h-7V3"/><path d="M13 21v-7"/><path d="M4 21v-7h5"/><path d="M9 10H4V3h5"/></IconBase>
         };
 
         const { 
             Package, Search, Check, X, Minus, Calculator, ImageIcon, Trash2, Plus, Settings, Edit2, 
-            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw
+            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw, Layers, FolderTree
         } = Icons;
 
         // --- 에러 바운더리 컴포넌트 ---
@@ -176,12 +178,10 @@
                 if (inputPw === serverPasswords.master) {
                     onLogin('admin', 'master');
                 } else {
-                    // 팀원 비밀번호 확인
                     const memberKey = Object.keys(serverPasswords.memberPasswords).find(key => serverPasswords.memberPasswords[key] === inputPw);
                     if (memberKey) {
                         onLogin('member', memberKey);
                     } else if (inputPw === "5678") {
-                        // 레거시/기본 비밀번호 지원 (초기 설정용)
                         onLogin('member', 'guest');
                     } else {
                         setError(true);
@@ -274,14 +274,10 @@
             )
         }
 
-        const SettingsModal = ({ currentCategories, currentCategoryFees, currentCategoryRatios, currentProjects, currentTeam, userRole, currentSecurity, onClose, onSave }) => {
-            const [cats, setCats] = useState([...currentCategories]);
-            const [fees, setFees] = useState({ ...currentCategoryFees });
-            const [ratios, setRatios] = useState({ ...currentCategoryRatios });
+        // --- 시스템 설정 모달 (프로젝트, 팀원, 암호) ---
+        const SystemSettingsModal = ({ currentProjects, currentTeam, userRole, currentSecurity, onClose, onSave }) => {
             const [projs, setProjs] = useState([...currentProjects]);
             const [team, setTeam] = useState([...currentTeam]);
-            
-            // 보안 설정
             const [masterPw, setMasterPw] = useState(currentSecurity?.master || DEFAULT_MASTER_PW);
             const [memberPwMap, setMemberPwMap] = useState(currentSecurity?.memberPasswords || {});
 
@@ -298,30 +294,24 @@
             };
 
             const handleSave = () => {
-                onSave(cats, fees, ratios, projs, team, false, { master: masterPw, memberPasswords: memberPwMap });
-            };
-
-            const handleBatchSave = () => {
-                onSave(cats, fees, ratios, projs, team, true, { master: masterPw, memberPasswords: memberPwMap });
+                onSave(projs, team, { master: masterPw, memberPasswords: memberPwMap });
             };
 
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-bold">
-                    <div className="bg-white rounded-2xl w-full max-w-3xl p-6 shadow-xl flex flex-col h-[800px] font-bold">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl flex flex-col h-[700px] font-bold">
                         <div className="flex justify-between items-center mb-6 border-b-2 border-indigo-50 pb-4">
-                            <h3 className="text-xl font-black uppercase text-indigo-900 font-bold tracking-tighter">대시보드 관리자 설정</h3>
+                            <h3 className="text-xl font-black uppercase text-indigo-900 font-bold tracking-tighter flex items-center gap-2"><Settings className="w-6 h-6"/>시스템 기본 설정</h3>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors font-bold font-black"><X className="w-6 h-6 font-bold"/></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-10">
-                            {userRole === 'admin' && (
-                                <section className="bg-red-50 p-4 rounded-2xl border border-red-100">
-                                    <label className="text-xs font-black text-red-600 uppercase mb-2 block tracking-widest border-b border-red-200 pb-1 flex items-center gap-2"><Key className="w-3 h-3"/> 마스터 계정 설정</label>
-                                    <div className="flex items-center gap-4">
-                                        <label className="text-[10px] font-bold text-red-400 w-24">관리자 암호</label>
-                                        <input type="text" value={masterPw} onChange={(e) => setMasterPw(e.target.value)} className="flex-1 border border-red-200 rounded-lg p-2 text-sm font-black text-red-800 focus:ring-1 focus:ring-red-400 bg-white outline-none"/>
-                                    </div>
-                                </section>
-                            )}
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8">
+                            <section className="bg-red-50 p-4 rounded-2xl border border-red-100">
+                                <label className="text-xs font-black text-red-600 uppercase mb-2 block tracking-widest border-b border-red-200 pb-1 flex items-center gap-2"><Key className="w-3 h-3"/> 마스터 계정 설정</label>
+                                <div className="flex items-center gap-4">
+                                    <label className="text-[10px] font-bold text-red-400 w-24">관리자 암호</label>
+                                    <input type="text" value={masterPw} onChange={(e) => setMasterPw(e.target.value)} className="flex-1 border border-red-200 rounded-lg p-2 text-sm font-black text-red-800 focus:ring-1 focus:ring-red-400 bg-white outline-none"/>
+                                </div>
+                            </section>
 
                             <section>
                                 <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1">팀원 및 암호 관리</label>
@@ -329,19 +319,10 @@
                                     {team.map((m, i) => (
                                         <div key={i} className="flex gap-2 group transition-all font-bold">
                                             <input value={m.label} onChange={(e) => { const n = [...team]; n[i] = { ...m, label: e.target.value }; setTeam(n); }} className="flex-1 border rounded-lg p-2 text-sm font-black focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 bg-gray-50" placeholder="팀원 이름 (예: 김MD)"/>
-                                            {/* 팀원별 비밀번호 입력칸 */}
-                                            {userRole === 'admin' && (
-                                                <div className="flex items-center gap-1 w-40">
-                                                    <Key className="w-4 h-4 text-gray-300"/>
-                                                    <input 
-                                                        type="text" 
-                                                        value={memberPwMap[m.key] || ''} 
-                                                        onChange={(e) => handleMemberPwChange(m.key, e.target.value)}
-                                                        placeholder="접속 암호"
-                                                        className="w-full border rounded-lg p-2 text-sm font-mono text-gray-600 focus:ring-1 focus:ring-gray-400 bg-gray-50 outline-none"
-                                                    />
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-1 w-40">
+                                                <Key className="w-4 h-4 text-gray-300"/>
+                                                <input type="text" value={memberPwMap[m.key] || ''} onChange={(e) => handleMemberPwChange(m.key, e.target.value)} placeholder="접속 암호" className="w-full border rounded-lg p-2 text-sm font-mono text-gray-600 focus:ring-1 focus:ring-gray-400 bg-gray-50 outline-none"/>
+                                            </div>
                                             <button onClick={() => setTeam(team.filter((_, idx) => idx !== i))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
                                         </div>
                                     ))}
@@ -350,7 +331,7 @@
                             </section>
 
                             <section>
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">시즌 그룹 관리</label>
+                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1 font-black">시즌/프로젝트 그룹 관리</label>
                                 <div className="space-y-2">
                                     {projs.map((p, i) => (
                                         <div key={i} className="flex items-center gap-2 group transition-all">
@@ -365,42 +346,131 @@
                                     <button onClick={() => setProjs([...projs, "새 프로젝트"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black uppercase tracking-widest font-bold">+ 추가</button>
                                 </div>
                             </section>
-                            <section>
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block tracking-widest border-b pb-1">원가 계산 공식 설정</label>
-                                <div className="space-y-4">
-                                    {cats.map((c, i) => (
-                                        <div key={i} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 group transition-all font-bold font-black">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 font-bold">
-                                                    <button onClick={() => moveItem(cats, setCats, i, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-3 h-3"/></button>
-                                                    <button onClick={() => moveItem(cats, setCats, i, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-3 h-3"/></button>
-                                                </div>
-                                                <input value={c} onChange={(e) => { const n = [...cats]; n[i] = e.target.value; setCats(n); }} className="flex-1 border-none bg-transparent text-sm font-black focus:ring-0 text-indigo-900" placeholder="카테고리명" />
-                                                <button onClick={() => setCats(cats.filter((_, idx) => idx !== i))} className="text-red-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="flex flex-col font-black font-bold">
-                                                    <span className="text-[10px] text-gray-400 mb-1.5 uppercase font-bold">환산 배율</span>
-                                                    <input type="number" step="0.01" value={ratios[c] || 1.0} onChange={(e) => setRatios({...ratios, [c]: Number(e.target.value)})} className="w-full border rounded-lg p-2.5 text-sm font-mono focus:ring-1 focus:ring-amber-400 outline-none text-amber-700 shadow-sm" />
-                                                </div>
-                                                <div className="flex flex-col font-bold">
-                                                    <span className="text-[10px] text-gray-400 mb-1.5 uppercase font-bold">고정 부대비용</span>
-                                                    <input type="number" value={fees[c] || 0} onChange={(e) => setFees({...fees, [c]: Number(e.target.value)})} className="w-full border rounded-lg p-2.5 text-sm font-mono focus:ring-1 focus:ring-indigo-400 outline-none text-indigo-700 shadow-sm" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => setCats([...cats, "새 카테고리"])} className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black font-bold">+ 추가</button>
-                                </div>
-                            </section>
                         </div>
-                        <div className="flex flex-col gap-3 mt-8 border-t pt-6 font-bold">
-                            <button onClick={handleBatchSave} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm shadow-md hover:bg-amber-600 transition-all font-black flex items-center justify-center gap-2 font-bold">
-                                <RefreshCw className="w-4 h-4 font-bold" /> 현재 공식을 기존 상품들에 일괄 적용하여 재계산
+                        <div className="flex gap-4 mt-6 pt-6 border-t font-bold">
+                            <button onClick={onClose} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-xs text-gray-500 hover:bg-gray-200 transition-all">취소</button>
+                            <button onClick={handleSave} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-black font-bold">시스템 설정 저장</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 카테고리 관리 모달 (계층형) ---
+        const CategorySettingsModal = ({ currentGroups, currentFees, currentRatios, onClose, onSave }) => {
+            const [groups, setGroups] = useState(JSON.parse(JSON.stringify(currentGroups)));
+            const [fees, setFees] = useState({ ...currentFees });
+            const [ratios, setRatios] = useState({ ...currentRatios });
+
+            const moveGroup = (index, direction) => {
+                const newGroups = [...groups];
+                const newIndex = direction === 'up' ? index - 1 : index + 1;
+                if (newIndex < 0 || newIndex >= newGroups.length) return;
+                [newGroups[index], newGroups[newIndex]] = [newGroups[newIndex], newGroups[index]];
+                setGroups(newGroups);
+            };
+
+            const moveSubCat = (groupIndex, subIndex, direction) => {
+                const newGroups = [...groups];
+                const subs = newGroups[groupIndex].subs;
+                const newIndex = direction === 'up' ? subIndex - 1 : subIndex + 1;
+                if (newIndex < 0 || newIndex >= subs.length) return;
+                [subs[subIndex], subs[newIndex]] = [subs[newIndex], subs[subIndex]];
+                setGroups(newGroups);
+            };
+
+            const addGroup = () => setGroups([...groups, { main: "새 대분류", subs: [] }]);
+            const removeGroup = (idx) => setGroups(groups.filter((_, i) => i !== idx));
+            const addSubCat = (gIdx) => {
+                const newGroups = [...groups];
+                newGroups[gIdx].subs.push("새 소분류");
+                setGroups(newGroups);
+            };
+            const removeSubCat = (gIdx, sIdx) => {
+                const newGroups = [...groups];
+                newGroups[gIdx].subs = newGroups[gIdx].subs.filter((_, i) => i !== sIdx);
+                setGroups(newGroups);
+            };
+
+            const updateMainName = (gIdx, val) => {
+                const newGroups = [...groups];
+                newGroups[gIdx].main = val;
+                setGroups(newGroups);
+            };
+            
+            const updateSubName = (gIdx, sIdx, oldVal, newVal) => {
+                const newGroups = [...groups];
+                newGroups[gIdx].subs[sIdx] = newVal;
+                setGroups(newGroups);
+                
+                // 이름 변경 시 fees/ratios 도 이전 (동일 이름인 경우 덮어쓰기 주의)
+                if (oldVal !== newVal) {
+                    const newFees = { ...fees };
+                    const newRatios = { ...ratios };
+                    if (newFees[oldVal] !== undefined) { newFees[newVal] = newFees[oldVal]; delete newFees[oldVal]; }
+                    if (newRatios[oldVal] !== undefined) { newRatios[newVal] = newRatios[oldVal]; delete newRatios[oldVal]; }
+                    setFees(newFees);
+                    setRatios(newRatios);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200 text-slate-800 font-bold">
+                    <div className="bg-white rounded-2xl w-full max-w-4xl p-6 shadow-xl flex flex-col h-[85vh] font-bold">
+                        <div className="flex justify-between items-center mb-6 border-b-2 border-indigo-50 pb-4">
+                            <h3 className="text-xl font-black uppercase text-indigo-900 font-bold tracking-tighter flex items-center gap-2"><FolderTree className="w-6 h-6"/>카테고리 및 원가 공식 설정</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors font-bold font-black"><X className="w-6 h-6 font-bold"/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">
+                            <p className="text-xs text-gray-500 font-bold">대분류를 생성하고 하위에 소분류(원가 공식 적용 대상)를 추가하세요.</p>
+                            {groups.map((g, gIdx) => (
+                                <div key={gIdx} className="bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm transition-all font-bold">
+                                    {/* 대분류 헤더 */}
+                                    <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200">
+                                        <div className="flex flex-col gap-0.5 opacity-40 hover:opacity-100 font-bold">
+                                            <button onClick={() => moveGroup(gIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-4 h-4"/></button>
+                                            <button onClick={() => moveGroup(gIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-4 h-4"/></button>
+                                        </div>
+                                        <Layers className="w-5 h-5 text-indigo-600" />
+                                        <input value={g.main} onChange={(e) => updateMainName(gIdx, e.target.value)} className="flex-1 border-none bg-transparent text-lg font-black focus:ring-0 text-indigo-900 outline-none" placeholder="대분류명" />
+                                        <button onClick={() => removeGroup(gIdx)} className="text-red-300 hover:text-red-500 bg-white p-1.5 rounded transition-colors"><Trash2 className="w-5 h-5"/></button>
+                                    </div>
+                                    
+                                    {/* 소분류 리스트 */}
+                                    <div className="pl-8 space-y-3">
+                                        {g.subs.map((sub, sIdx) => (
+                                            <div key={sIdx} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm group">
+                                                <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 font-bold">
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-3 h-3"/></button>
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-3 h-3"/></button>
+                                                </div>
+                                                <input value={sub} onChange={(e) => updateSubName(gIdx, sIdx, sub, e.target.value)} className="w-40 border border-gray-200 rounded p-2 text-sm font-black focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700" placeholder="소분류명" />
+                                                
+                                                <div className="flex items-center gap-2 text-[10px] text-gray-500 font-black">
+                                                    <span>배율:</span>
+                                                    <input type="number" step="0.01" value={ratios[sub] || 1.0} onChange={(e) => setRatios({...ratios, [sub]: Number(e.target.value)})} className="w-20 border rounded p-1.5 text-sm font-mono focus:ring-1 focus:ring-amber-400 outline-none text-amber-700" />
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[10px] text-gray-500 font-black">
+                                                    <span>고정비용:</span>
+                                                    <input type="number" value={fees[sub] || 0} onChange={(e) => setFees({...fees, [sub]: Number(e.target.value)})} className="w-28 border rounded p-1.5 text-sm font-mono focus:ring-1 focus:ring-indigo-400 outline-none text-indigo-700" />
+                                                </div>
+                                                <div className="flex-1"></div>
+                                                <button onClick={() => removeSubCat(gIdx, sIdx)} className="text-gray-300 hover:text-red-500 transition-colors"><X className="w-4 h-4"/></button>
+                                            </div>
+                                        ))}
+                                        <button onClick={() => addSubCat(gIdx)} className="w-full py-2 border-2 border-dashed border-gray-200 bg-white rounded-xl text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-black">+ 하위 소분류 추가</button>
+                                    </div>
+                                </div>
+                            ))}
+                            <button onClick={addGroup} className="w-full py-4 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-2xl text-sm text-indigo-500 hover:bg-indigo-100 transition-all font-black font-bold flex items-center justify-center gap-2"><Plus className="w-5 h-5"/> 신규 대분류 생성</button>
+                        </div>
+                        <div className="flex flex-col gap-3 mt-6 pt-4 border-t font-bold">
+                            <button onClick={() => onSave(groups, fees, ratios, true)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-sm shadow-md hover:bg-amber-600 transition-all font-black flex items-center justify-center gap-2 font-bold">
+                                <RefreshCw className="w-4 h-4 font-bold" /> 현재 수정한 공식을 기존 등록 상품들에 즉시 일괄 적용
                             </button>
                             <div className="flex gap-4">
                                 <button onClick={onClose} className="flex-1 bg-gray-100 py-3.5 rounded-xl text-xs text-gray-500 hover:bg-gray-200 transition-all">취소</button>
-                                <button onClick={handleSave} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-black font-bold">설정 저장 (암호 포함)</button>
+                                <button onClick={() => onSave(groups, fees, ratios, false)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3.5 rounded-xl text-xs shadow-lg hover:bg-indigo-700 transition-all font-black font-bold">설정만 저장</button>
                             </div>
                         </div>
                     </div>
@@ -483,7 +553,7 @@
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="font-black text-gray-800">{item.name}</div>
-                                                    <div className="text-xs text-gray-500">{item.project} / {item.category}</div>
+                                                    <div className="text-xs text-gray-500">{item.project} / {item.mainCategory} > {item.category}</div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-400">
                                                     {new Date(item.updatedAt || Date.now()).toLocaleString()}
@@ -514,28 +584,38 @@
             const { getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch, initializeApp, getApps } = firebaseSDK;
 
             const [user, setUser] = useState(null);
-            const [authError, setAuthError] = useState(null);
-            const [activeTab, setActiveTab] = useState("전체");
+            
+            // UI 상태
+            const [activeMainCategory, setActiveMainCategory] = useState("전체");
+            const [activeCategory, setActiveCategory] = useState("전체");
+            const [expandedMainCats, setExpandedMainCats] = useState({}); // 트리 메뉴 확장 상태
+            
             const [activeProject, setActiveProject] = useState("전체");
-            const [products, setProducts] = useState([]);
-            const [settings, setSettings] = useState({ 
-                categories: [], categoryFees: {}, categoryRatios: {}, projects: [], teamMembers: [], exchangeRate: 195 
-            });
-            const [security, setSecurity] = useState({ master: DEFAULT_MASTER_PW, memberPasswords: {} });
             const [searchTerm, setSearchTerm] = useState("");
             const [filterStatus, setFilterStatus] = useState("unconfirmed"); 
             const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+            
+            // 모달 상태
             const [isAddModalOpen, setIsAddModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null); 
-            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
+            const [isCategorySettingsOpen, setIsCategorySettingsOpen] = useState(false);
             const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
             const [isLogModalOpen, setIsLogModalOpen] = useState(false); 
             const [isTrashModalOpen, setIsTrashModalOpen] = useState(false); 
-            const [logs, setLogs] = useState([]); 
-            const [memoTarget, setMemoTarget] = useState({ id: null, content: '', category: null });
             const [previewImage, setPreviewImage] = useState(null);
+
+            // 데이터 상태
+            const [products, setProducts] = useState([]);
+            const [logs, setLogs] = useState([]); 
+            const [settings, setSettings] = useState({ 
+                categoryGroups: [], categoryFees: {}, categoryRatios: {}, projects: [], teamMembers: [], exchangeRate: 195 
+            });
+            const [security, setSecurity] = useState({ master: DEFAULT_MASTER_PW, memberPasswords: {} });
+            const [memoTarget, setMemoTarget] = useState({ id: null, content: '', category: null });
+            
             const [productForm, setProductForm] = useState({ 
-                project: '', category: '', name: '', option: '', 
+                project: '', mainCategory: '', category: '', name: '', option: '', 
                 cost: '', price: '', image: null, optionImage: null, cny: '',
                 links: [''], naverLinks: ['']
             });
@@ -591,6 +671,14 @@
                 return () => unsubscribe();
             }, [auth]);
 
+            // 대분류 찾기 헬퍼 (기존 데이터 호환용)
+            const findMainCategoryForSub = (subCat, groups) => {
+                for (const g of groups) {
+                    if (g.subs.includes(subCat)) return g.main;
+                }
+                return "기본 분류";
+            };
+
             useEffect(() => {
                 if (!user) return;
                 const prodRef = collection(db, 'artifacts', appId, 'public', 'data', 'products');
@@ -607,17 +695,37 @@
                 const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
+                        
+                        // 기존 플랫 카테고리를 하위 호환 구조로 감싸기
+                        let catGroups = data.categoryGroups || [];
+                        if (catGroups.length === 0 && data.categories && data.categories.length > 0) {
+                            catGroups = [{ main: "기본 분류", subs: data.categories }];
+                        } else if (catGroups.length === 0) {
+                            catGroups = [{ main: "의류", subs: ["아우터", "상의", "하의"] }];
+                        }
+
                         setSettings({ 
-                            categories: data.categories || [], categoryFees: data.categoryFees || {}, categoryRatios: data.categoryRatios || {}, 
-                            projects: data.projects || [], teamMembers: data.teamMembers || [], exchangeRate: data.exchangeRate || 195 
+                            categoryGroups: catGroups, 
+                            categoryFees: data.categoryFees || {}, 
+                            categoryRatios: data.categoryRatios || {}, 
+                            projects: data.projects || [], 
+                            teamMembers: data.teamMembers || [], 
+                            exchangeRate: data.exchangeRate || 195 
                         });
                     } else {
+                        // 초기 설정
+                        const initialGroups = [{ main: "기본 분류", subs: ["아쿠아슈즈", "스노쿨링마스크", "방수팩"] }];
                         setDoc(settingsRef, { 
-                            categories: ["아쿠아슈즈", "스노쿨링마스크", "방수팩"], categoryFees: {"아쿠아슈즈": 5000, "스노쿨링마스크": 8000}, categoryRatios: {"아쿠아슈즈": 1.0, "스노쿨링마스크": 1.0},
-                            projects: ["2024 여름"], teamMembers: [{key: 'ceo', label: '사장님'}], exchangeRate: 195 
+                            categoryGroups: initialGroups, 
+                            categoryFees: {"아쿠아슈즈": 5000, "스노쿨링마스크": 8000}, 
+                            categoryRatios: {"아쿠아슈즈": 1.0, "스노쿨링마스크": 1.0},
+                            projects: ["2024 여름"], 
+                            teamMembers: [{key: 'ceo', label: '사장님'}], 
+                            exchangeRate: 195 
                         });
                     }
                 });
+                
                 const securityRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security');
                 const unsubSecurity = onSnapshot(securityRef, (snapshot) => {
                     if (snapshot.exists()) { setSecurity(snapshot.data()); }
@@ -655,49 +763,79 @@
                 return () => window.removeEventListener('paste', handlePaste);
             }, [isAddModalOpen, lastTargetZone]);
 
+            // 기존 데이터의 mainCategory 유추 보정 로직 적용하여 필터링
+            const displayProducts = useMemo(() => {
+                return products.map(p => {
+                    const mappedMain = p.mainCategory || findMainCategoryForSub(p.category, settings.categoryGroups);
+                    return { ...p, mappedMainCategory: mappedMain };
+                });
+            }, [products, settings.categoryGroups]);
+
             const filteredProducts = useMemo(() => {
-                let list = products.filter(p => !p.isDeleted); // 삭제되지 않은 것만
+                let list = displayProducts.filter(p => !p.isDeleted);
+                
                 if (activeProject !== "전체") list = list.filter(p => p.project === activeProject);
-                if (activeTab !== "전체") list = list.filter(p => p.category === activeTab);
+                
+                // 대분류 필터 적용
+                if (activeMainCategory !== "전체") {
+                    list = list.filter(p => p.mappedMainCategory === activeMainCategory);
+                    // 소분류 필터 적용
+                    if (activeCategory !== "전체") {
+                        list = list.filter(p => p.category === activeCategory);
+                    }
+                }
+
                 if (searchTerm) {
                     const term = searchTerm.toLowerCase();
                     list = list.filter(p => p.name?.toLowerCase().includes(term) || p.option?.toLowerCase().includes(term));
                 }
+                
                 if (filterStatus === 'confirmed') list = list.filter(p => p.isConfirmed);
                 else if (filterStatus === 'held') list = list.filter(p => p.isHeld && !p.isConfirmed);
                 else if (filterStatus === 'unconfirmed') list = list.filter(p => !p.isConfirmed && !p.isHeld);
                 else if (filterStatus === 'sample_ordered') list = list.filter(p => p.isSampleOrdered);
+                
                 return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            }, [products, activeProject, activeTab, searchTerm, filterStatus]);
+            }, [displayProducts, activeProject, activeMainCategory, activeCategory, searchTerm, filterStatus]);
 
             const deletedProducts = useMemo(() => {
-                return products.filter(p => p.isDeleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-            }, [products]);
+                return displayProducts.filter(p => p.isDeleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            }, [displayProducts]);
 
             const activeCategoryCounts = useMemo(() => {
-                const counts = {};
-                products.filter(p => !p.isDeleted).forEach(p => { 
+                const counts = { main: {}, sub: {} };
+                displayProducts.filter(p => !p.isDeleted).forEach(p => { 
                     const isSameProject = activeProject === "전체" || p.project === activeProject;
                     if (isSameProject && !p.isConfirmed && !p.isHeld) {
-                        counts[p.category] = (counts[p.category] || 0) + 1;
+                        // 대분류 카운트
+                        counts.main[p.mappedMainCategory] = (counts.main[p.mappedMainCategory] || 0) + 1;
+                        // 소분류 카운트
+                        counts.sub[p.category] = (counts.sub[p.category] || 0) + 1;
                     }
                 });
                 return counts;
-            }, [products, activeProject]);
+            }, [displayProducts, activeProject]);
 
             const handleAddOrUpdateProduct = async (e) => {
                 e.preventDefault(); if (!user) return;
                 try {
                     const cleanLinks = productForm.links.filter(l => l.trim() !== '');
                     const cleanNaverLinks = productForm.naverLinks.filter(l => l.trim() !== '');
-                    const payload = { ...productForm, links: cleanLinks, naverLinks: cleanNaverLinks, cost: Number(productForm.cost), price: Number(productForm.price), updatedAt: Date.now() };
+                    const payload = { 
+                        ...productForm, 
+                        links: cleanLinks, 
+                        naverLinks: cleanNaverLinks, 
+                        cost: Number(productForm.cost), 
+                        price: Number(productForm.price), 
+                        updatedAt: Date.now() 
+                    };
                     
                     if (editingItem) { 
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload); 
-                        logAction("상품 수정", `[${payload.project}/${payload.category}] ${payload.name} (${payload.option || '옵션없음'})`);
+                        logAction("상품 수정", `[${payload.project}] ${payload.name} (${payload.option || '옵션없음'})`);
                     } else { 
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, id: Date.now(), createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleOrdered: false, isDeleted: false, approvals: settings.teamMembers.reduce((acc, m) => ({...acc, [m.key]: 'pending'}), {}) }); 
-                        logAction("신규 등록", `[${payload.project}/${payload.category}] ${payload.name} (${payload.option || '옵션없음'})`);
+                        logAction("신규 등록", `[${payload.project}] ${payload.name} (${payload.option || '옵션없음'})`);
                     }
                     setIsAddModalOpen(false);
                 } catch (err) { alert("저장 실패: " + err.message); }
@@ -705,13 +843,13 @@
 
             const handleExportCSV = () => {
                 if (filteredProducts.length === 0) return;
-                const headers = ["번호", "시즌", "카테고리", "상태", "상품명", "옵션", "원가", "판매가", "마진", "마진율", "1688링크들", "경쟁사링크들", "메모"].join(",");
+                const headers = ["번호", "시즌", "대분류", "소분류", "상태", "상품명", "옵션", "원가", "판매가", "마진", "마진율", "1688링크들", "경쟁사링크들", "메모"].join(",");
                 const rows = filteredProducts.map((p, idx) => {
                     const margin = (p.price || 0) - (p.cost || 0);
                     const marginRate = p.price ? ((margin / p.price) * 100).toFixed(1) + "%" : "0%";
                     let st = p.isConfirmed ? "확정" : (p.isHeld ? "보류" : "진행중");
                     return [
-                        idx + 1, p.project || "미지정", p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`, `"${(p.option || "").replace(/"/g, '""')}"`, p.cost, p.price, margin, marginRate, `"${(p.links || []).join(' | ')}"`, `"${(p.naverLinks || []).join(' | ')}"`, `"${(p.memo || "").replace(/"/g, '""')}"`
+                        idx + 1, p.project || "미지정", p.mappedMainCategory, p.category, st, `"${(p.name || "").replace(/"/g, '""')}"`, `"${(p.option || "").replace(/"/g, '""')}"`, p.cost, p.price, margin, marginRate, `"${(p.links || []).join(' | ')}"`, `"${(p.naverLinks || []).join(' | ')}"`, `"${(p.memo || "").replace(/"/g, '""')}"`
                     ].join(",");
                 });
                 const blob = new Blob(["\uFEFF" + [headers, ...rows].join("\n")], { type: 'text/csv;charset=utf-8;' });
@@ -721,8 +859,26 @@
                 link.click();
             };
 
-            const handleCnyChange = (val) => { const categoryFee = settings.categoryFees[productForm.category] || 0; const categoryRatio = settings.categoryRatios[productForm.category] || 1.0; const cost = val ? Math.round(val * settings.exchangeRate * categoryRatio) + categoryFee : ''; setProductForm(prev => ({ ...prev, cny: val, cost: cost })); };
-            const handleCategoryChangeInForm = (cat) => { const categoryFee = settings.categoryFees[cat] || 0; const categoryRatio = settings.categoryRatios[cat] || 1.0; const newCost = productForm.cny ? Math.round(productForm.cny * settings.exchangeRate * categoryRatio) + categoryFee : productForm.cost; setProductForm(prev => ({ ...prev, category: cat, cost: newCost })); };
+            const handleCnyChange = (val) => { 
+                const categoryFee = settings.categoryFees[productForm.category] || 0; 
+                const categoryRatio = settings.categoryRatios[productForm.category] || 1.0; 
+                const cost = val ? Math.round(val * settings.exchangeRate * categoryRatio) + categoryFee : ''; 
+                setProductForm(prev => ({ ...prev, cny: val, cost: cost })); 
+            };
+            
+            const handleMainCategoryChangeInForm = (mainCat) => {
+                const group = settings.categoryGroups.find(g => g.main === mainCat);
+                const subCat = group && group.subs.length > 0 ? group.subs[0] : '';
+                handleCategoryChangeInForm(subCat, mainCat);
+            };
+
+            const handleCategoryChangeInForm = (cat, mainCat = productForm.mainCategory) => { 
+                const categoryFee = settings.categoryFees[cat] || 0; 
+                const categoryRatio = settings.categoryRatios[cat] || 1.0; 
+                const newCost = productForm.cny ? Math.round(productForm.cny * settings.exchangeRate * categoryRatio) + categoryFee : productForm.cost; 
+                setProductForm(prev => ({ ...prev, mainCategory: mainCat, category: cat, cost: newCost })); 
+            };
+            
             const handleLinkChange = (type, index, value) => { const field = type === '1688' ? 'links' : 'naverLinks'; const newList = [...productForm[field]]; newList[index] = value; setProductForm(prev => ({ ...prev, [field]: newList })); };
             const addLinkField = (type) => { const field = type === '1688' ? 'links' : 'naverLinks'; setProductForm(prev => ({ ...prev, [field]: [...prev[field], ''] })); };
             const removeLinkField = (type, index) => { const field = type === '1688' ? 'links' : 'naverLinks'; if (productForm[field].length <= 1) return; const newList = productForm[field].filter((_, i) => i !== index); setProductForm(prev => ({ ...prev, [field]: newList })); };
@@ -782,31 +938,57 @@
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', memoTarget.id), { memo: memoTarget.content }); 
                 setIsMemoModalOpen(false); 
             };
-            const saveSettingsBatch = async (newCategories, newCategoryFees, newCategoryRatios, newProjects, newTeam, bulkApply, newSecurity) => {
+            
+            const saveSystemSettings = async (newProjects, newTeam, newSecurity) => {
                 if (!user) return;
                 try {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { categories: newCategories, categoryFees: newCategoryFees, categoryRatios: newCategoryRatios, projects: newProjects, teamMembers: newTeam });
-                    
-                    // [추가] 보안 설정 함께 저장
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { projects: newProjects, teamMembers: newTeam });
                     if (newSecurity) {
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'security'), newSecurity);
                     }
+                    logAction("시스템 설정 변경", "프로젝트/팀원/보안 설정 업데이트");
+                    setIsSystemSettingsOpen(false);
+                } catch(e) { alert("설정 저장 실패: " + e.message); }
+            };
 
-                    logAction("시스템 설정 변경", "설정 및 암호 업데이트됨");
+            const saveCategorySettings = async (newGroups, newFees, newRatios, bulkApply) => {
+                if (!user) return;
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { 
+                        categoryGroups: newGroups, 
+                        categoryFees: newFees, 
+                        categoryRatios: newRatios 
+                    });
+                    logAction("카테고리 설정 변경", "카테고리 분류 및 비용 공식 업데이트");
+                    
                     if (bulkApply) {
                         const batch = writeBatch(db); let updateCount = 0;
-                        products.forEach(p => { if (p.cny) { const ratio = newCategoryRatios[p.category] || 1.0; const fee = newCategoryFees[p.category] || 0; const newCost = Math.round(p.cny * settings.exchangeRate * ratio) + fee; if (p.cost !== newCost) { batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'products', p.firebaseId), { cost: newCost }); updateCount++; } } });
+                        products.forEach(p => { 
+                            if (p.cny) { 
+                                const ratio = newRatios[p.category] || 1.0; 
+                                const fee = newFees[p.category] || 0; 
+                                const newCost = Math.round(p.cny * settings.exchangeRate * ratio) + fee; 
+                                if (p.cost !== newCost) { 
+                                    batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'products', p.firebaseId), { cost: newCost }); 
+                                    updateCount++; 
+                                } 
+                            } 
+                        });
                         if (updateCount > 0) await batch.commit(); 
                         alert(`일괄 적용 완료: ${updateCount}개 상품`);
                         logAction("원가 일괄 재계산", `${updateCount}개 상품 원가 업데이트 완료`);
                     }
-                    setIsSettingsOpen(false);
-                } catch (err) { alert("설정 저장 실패: " + err.message); }
+                    setIsCategorySettingsOpen(false);
+                } catch(e) { alert("카테고리 저장 실패: " + e.message); }
+            };
+
+            const toggleMainCatExpand = (mainCat) => {
+                setExpandedMainCats(prev => ({ ...prev, [mainCat]: !prev[mainCat] }));
             };
 
             return (
                 <div className="flex h-screen bg-gray-50 text-slate-800 font-sans overflow-hidden text-sm md:text-base selection:bg-indigo-100 font-bold">
-                    <div className={`sidebar-transition bg-white border-r border-gray-200 flex flex-col shadow-sm z-20 overflow-hidden ${isSidebarOpen ? 'w-64' : 'w-0'}`}>
+                    <div className={`sidebar-transition bg-white border-r border-gray-200 flex flex-col shadow-sm z-20 overflow-hidden ${isSidebarOpen ? 'w-72' : 'w-0'}`}>
                         <div className="p-6 border-b border-gray-100 bg-indigo-600 text-white flex-shrink-0">
                             <h1 className="text-xl font-black flex items-center gap-2 whitespace-nowrap tracking-tighter">
                                 <Package className="w-6 h-6 flex-shrink-0 font-bold" /> 소싱 관리 보드
@@ -826,30 +1008,70 @@
                                 <div className="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-2 font-black">
                                     <Flag className="w-3 h-3" /> 시즌 / 프로젝트
                                 </div>
-                                <select value={activeProject} onChange={(e) => { setActiveProject(e.target.value); setActiveTab("전체"); }} className="w-full bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-lg px-3 py-2 text-sm font-black focus:ring-2 focus:ring-indigo-300 outline-none">
+                                <select value={activeProject} onChange={(e) => { setActiveProject(e.target.value); setActiveMainCategory("전체"); setActiveCategory("전체"); }} className="w-full bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-lg px-3 py-2 text-sm font-black focus:ring-2 focus:ring-indigo-300 outline-none">
                                     <option value="전체">전체 리스트 보기</option>
                                     {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
                                 </select>
                             </div>
                             
-                            {/* ... 기존 사이드바 필터 메뉴들 ... */}
+                            {/* 트리형 카테고리 메뉴 */}
                             <div>
                                 <div className="px-3 mb-2 text-xs font-black text-gray-400 uppercase flex items-center gap-2">
-                                    <LayoutDashboard className="w-3 h-3 flex-shrink-0" /> 소싱 진행 목록
+                                    <LayoutDashboard className="w-3 h-3 flex-shrink-0" /> 소싱 카테고리
                                 </div>
                                 <div className="space-y-1">
-                                    <button onClick={() => { setActiveTab("전체"); setFilterStatus('unconfirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center whitespace-nowrap transition-all ${activeTab === "전체" && filterStatus === 'unconfirmed' ? "bg-indigo-100 text-indigo-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
-                                        <span>전체 보기</span>
+                                    <button onClick={() => { setActiveMainCategory("전체"); setActiveCategory("전체"); setFilterStatus('unconfirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center whitespace-nowrap transition-all ${activeMainCategory === "전체" && filterStatus === 'unconfirmed' ? "bg-indigo-100 text-indigo-800 shadow-sm" : "text-gray-700 hover:bg-gray-100"}`}>
+                                        <span>모든 카테고리 보기</span>
                                         <span className="bg-indigo-200 text-indigo-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && !p.isConfirmed && !p.isHeld && !p.isDeleted).length}</span>
                                     </button>
-                                    {settings.categories.map(cat => (
-                                        activeCategoryCounts[cat] > 0 && (
-                                            <button key={cat} onClick={() => { setActiveTab(cat); setFilterStatus('unconfirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm flex justify-between items-center transition-all ${activeTab === cat && filterStatus === 'unconfirmed' ? "bg-indigo-50 text-indigo-700 font-black ring-1 ring-indigo-200 shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}>
-                                                <span className="truncate">{cat}</span>
-                                                <span className="text-xs text-gray-400 font-mono">{activeCategoryCounts[cat]}</span>
-                                            </button>
-                                        )
-                                    ))}
+                                    
+                                    {/* 카테고리 그룹 순회 */}
+                                    <div className="pt-2">
+                                        {settings.categoryGroups.map(group => {
+                                            const isMainActive = activeMainCategory === group.main;
+                                            const isExpanded = expandedMainCats[group.main];
+                                            const mainCount = activeCategoryCounts.main[group.main] || 0;
+                                            
+                                            if (mainCount === 0 && !isMainActive && activeMainCategory !== "전체") return null; // 빈 분류 숨기기 옵션 고려
+                                            
+                                            return (
+                                                <div key={group.main} className="mb-1">
+                                                    <button 
+                                                        onClick={() => { setActiveMainCategory(group.main); setActiveCategory("전체"); toggleMainCatExpand(group.main); setFilterStatus('unconfirmed'); }} 
+                                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm flex justify-between items-center transition-all ${isMainActive && activeCategory === "전체" ? "bg-indigo-50 text-indigo-700 font-black shadow-sm ring-1 ring-indigo-200" : "text-gray-700 hover:bg-gray-100 font-bold"}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400"/> : <ChevronRight className="w-4 h-4 text-gray-400"/>}
+                                                            <FolderTree className="w-4 h-4 text-indigo-400"/>
+                                                            <span className="truncate">{group.main}</span>
+                                                        </div>
+                                                        {mainCount > 0 && <span className="text-xs text-gray-400 font-mono">{mainCount}</span>}
+                                                    </button>
+                                                    
+                                                    {/* 소분류들 */}
+                                                    {isExpanded && (
+                                                        <div className="pl-6 pr-1 mt-1 space-y-0.5 border-l-2 border-gray-100 ml-4">
+                                                            {group.subs.map(sub => {
+                                                                const subCount = activeCategoryCounts.sub[sub] || 0;
+                                                                const isSubActive = isMainActive && activeCategory === sub;
+                                                                if (subCount === 0 && !isSubActive) return null; // 데이터 있는것만
+                                                                return (
+                                                                    <button 
+                                                                        key={sub}
+                                                                        onClick={() => { setActiveMainCategory(group.main); setActiveCategory(sub); setFilterStatus('unconfirmed'); }}
+                                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs flex justify-between items-center transition-all ${isSubActive ? "bg-indigo-50 text-indigo-700 font-black" : "text-gray-500 hover:bg-gray-50 font-bold"}`}
+                                                                    >
+                                                                        <span className="truncate flex items-center gap-1.5"><Minus className="w-3 h-3 text-gray-300"/> {sub}</span>
+                                                                        {subCount > 0 && <span className="text-[10px] text-gray-400 font-mono">{subCount}</span>}
+                                                                    </button>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                             <div>
@@ -857,9 +1079,9 @@
                                     <Truck className="w-3 h-3 flex-shrink-0" /> 샘플 현황
                                 </div>
                                 <div className="space-y-1">
-                                    <button onClick={() => { setActiveTab("전체"); setFilterStatus('sample_ordered'); }} className={`w-full text-left px-4 py-2 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'sample_ordered' ? "bg-purple-100 text-purple-800 shadow-sm font-black" : "text-gray-600 hover:bg-gray-100"}`}>
+                                    <button onClick={() => { setActiveMainCategory("전체"); setActiveCategory("전체"); setFilterStatus('sample_ordered'); }} className={`w-full text-left px-4 py-2 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'sample_ordered' ? "bg-purple-100 text-purple-800 shadow-sm font-black" : "text-gray-600 hover:bg-gray-100"}`}>
                                         <span>신청 완료</span>
-                                        <span className="text-xs font-mono">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isSampleOrdered && !p.isDeleted).length}</span>
+                                        <span className="text-xs font-mono">{displayProducts.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isSampleOrdered && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -868,9 +1090,9 @@
                                     <CheckCircle className="w-3 h-3 flex-shrink-0" /> 최종 확정 목록
                                 </div>
                                 <div className="space-y-1">
-                                    <button onClick={() => { setActiveTab("전체"); setFilterStatus('confirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${activeTab === "전체" && filterStatus === 'confirmed' ? "bg-green-100 text-green-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
+                                    <button onClick={() => { setActiveMainCategory("전체"); setActiveCategory("전체"); setFilterStatus('confirmed'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'confirmed' ? "bg-green-100 text-green-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
                                         <span>확정 건 전체</span>
-                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isConfirmed && !p.isDeleted).length}</span>
+                                        <span className="bg-green-200 text-green-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{displayProducts.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isConfirmed && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -879,9 +1101,9 @@
                                     <Clock className="w-3 h-3 flex-shrink-0" /> 보류 보관함
                                 </div>
                                 <div className="space-y-1">
-                                    <button onClick={() => { setActiveTab("전체"); setFilterStatus('held'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'held' ? "bg-amber-100 text-amber-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
+                                    <button onClick={() => { setActiveMainCategory("전체"); setActiveCategory("전체"); setFilterStatus('held'); }} className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-black flex justify-between items-center transition-all ${filterStatus === 'held' ? "bg-amber-100 text-amber-800 shadow-sm font-black" : "text-gray-700 hover:bg-gray-100"}`}>
                                         <span>보류 중인 상품</span>
-                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{products.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isHeld && !p.isConfirmed && !p.isDeleted).length}</span>
+                                        <span className="bg-amber-200 text-amber-800 text-xs py-0.5 px-2 rounded-full font-mono font-black">{displayProducts.filter(p=> (activeProject === "전체" || p.project === activeProject) && p.isHeld && !p.isConfirmed && !p.isDeleted).length}</span>
                                     </button>
                                 </div>
                             </div>
@@ -895,16 +1117,21 @@
                                 </button>
                             )}
 
-                            {/* [추가] 휴지통 버튼 */}
-                            <button onClick={() => setIsTrashModalOpen(true)} className="w-full bg-red-50 border border-red-100 p-3 rounded-xl flex items-center justify-between text-sm text-red-600 hover:bg-red-100 transition-all font-bold">
+                            {/* 휴지통 버튼 */}
+                            <button onClick={() => setIsTrashModalOpen(true)} className="w-full bg-red-50 border border-red-100 p-3 rounded-xl flex items-center justify-between text-sm text-red-600 hover:bg-red-100 transition-all font-bold mt-2">
                                 <span className="flex items-center gap-2"><Trash2 className="w-4 h-4"/> 🗑️ 휴지통</span>
                                 <span className="bg-red-200 text-red-800 text-xs py-0.5 px-2 rounded-full font-mono">{deletedProducts.length}</span>
                             </button>
                         </div>
                         <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between flex-shrink-0 font-bold text-[10px]">
-                            <span className="text-gray-400">ID: {user?.uid.slice(0, 8) || '...'}</span>
+                            <span className="text-gray-400 truncate w-16" title={user?.uid}>ID: {user?.uid.slice(0, 5)}...</span>
+                            
+                            {/* [변경] 관리자용 설정 버튼 2분할 */}
                             {userRole === 'admin' ? (
-                                <button onClick={() => setIsSettingsOpen(true)} className="text-gray-500 hover:text-indigo-600 flex items-center gap-1"><Settings className="w-4 h-4" /> 시스템 설정</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setIsCategorySettingsOpen(true)} className="text-indigo-500 hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded"><FolderTree className="w-3 h-3" /> 분류설정</button>
+                                    <button onClick={() => setIsSystemSettingsOpen(true)} className="text-gray-500 hover:text-gray-800 flex items-center gap-1 bg-gray-200 px-2 py-1 rounded"><Settings className="w-3 h-3" /> 시스템</button>
+                                </div>
                             ) : (
                                 <span className="text-gray-300 flex items-center gap-1 cursor-not-allowed"><Lock className="w-3 h-3"/> 설정 잠김</span>
                             )}
@@ -918,7 +1145,8 @@
                                     <Menu className="w-5 h-5 font-bold" />
                                 </button>
                                 <h2 className="text-lg font-black text-gray-800 flex items-center gap-2 truncate uppercase tracking-tight">
-                                    {activeProject} <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 font-bold" /> {activeTab}
+                                    {activeProject} <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 font-bold" /> 
+                                    {activeMainCategory === "전체" ? "모든 카테고리" : `${activeMainCategory} > ${activeCategory === "전체" ? '전체' : activeCategory}`}
                                 </h2>
                             </div>
                             <div className="flex items-center gap-3 font-black">
@@ -928,7 +1156,13 @@
                                 </div>
                                 <button onClick={handleExportCSV} className="bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-black flex items-center gap-2 hover:bg-gray-50 shadow-sm transition-colors font-bold"><Download className="w-4 h-4"/>출력</button>
                                 {userRole === 'admin' && (
-                                    <button onClick={() => { setEditingItem(null); setProductForm({project: activeProject === "전체" ? settings.projects[0] : activeProject, category: activeTab === "전체" ? settings.categories[0] : activeTab, name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: ['']}); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all flex-shrink-0 font-black font-bold"><Plus className="w-4 h-4 font-bold"/>신규 등록</button>
+                                    <button onClick={() => { 
+                                        const initialMain = settings.categoryGroups.length > 0 ? settings.categoryGroups[0].main : '';
+                                        const initialSub = settings.categoryGroups.length > 0 && settings.categoryGroups[0].subs.length > 0 ? settings.categoryGroups[0].subs[0] : '';
+                                        setEditingItem(null); 
+                                        setProductForm({project: activeProject === "전체" ? settings.projects[0] : activeProject, mainCategory: initialMain, category: initialSub, name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: ['']}); 
+                                        setIsAddModalOpen(true); 
+                                    }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-2 shadow-md hover:bg-indigo-700 transition-all flex-shrink-0 font-black font-bold"><Plus className="w-4 h-4 font-bold"/>신규 등록</button>
                                 )}
                             </div>
                         </header>
@@ -966,10 +1200,10 @@
                                                         <td className="px-6 py-4 font-bold font-black">
                                                             <div className="flex flex-col gap-1 font-black">
                                                                 <div className="flex gap-1.5 flex-wrap">
-                                                                    {(activeProject === "전체") && <div className="w-fit text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{item.project}</div>}
-                                                                    {(activeTab === "전체") && <div className="w-fit text-[9px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{item.category}</div>}
+                                                                    <div className="w-fit text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{item.project}</div>
+                                                                    <div className="w-fit text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-0.5">{item.mappedMainCategory} <ChevronRight className="w-2 h-2"/> {item.category}</div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2 font-black text-gray-900">
+                                                                <div className="flex items-center gap-2 font-black text-gray-900 mt-1">
                                                                     <div className="line-clamp-1">{item.name}</div>
                                                                     {item.isSampleOrdered && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-black">샘플완료</span>}
                                                                 </div>
@@ -1010,7 +1244,7 @@
                                                                     </button>
                                                                     <div className="flex justify-center gap-2 mt-0.5 font-bold">
                                                                         <button onClick={() => { setMemoTarget({id: item.firebaseId, content: item.memo || ''}); setIsMemoModalOpen(true); }} className={`p-1.5 rounded hover:bg-amber-50 transition-colors ${item.memo ? 'text-amber-500' : 'text-gray-300'}`} title="메모"><StickyNote className="w-4 h-4"/></button>
-                                                                        <button onClick={() => { setEditingItem(item); setProductForm({...item, links: item.links || [''], naverLinks: item.naverLinks || ['']}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors font-bold"><Edit2 className="w-4 h-4 font-bold"/></button>
+                                                                        <button onClick={() => { setEditingItem(item); setProductForm({...item, mainCategory: item.mainCategory || item.mappedMainCategory, links: item.links || [''], naverLinks: item.naverLinks || ['']}); setIsAddModalOpen(true); }} className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors font-bold"><Edit2 className="w-4 h-4 font-bold"/></button>
                                                                         <button onClick={() => deleteItem(item)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors font-bold font-black"><Trash2 className="w-4 h-4 font-bold"/></button>
                                                                     </div>
                                                                 </div>
@@ -1023,7 +1257,7 @@
                                     </table>
                                 </div>
                             ) : (
-                                <div className="p-20 text-center text-gray-400 bg-white rounded-2xl border-2 border-dashed border-gray-200 font-black uppercase tracking-widest font-black font-bold">등록된 상품 정보가 없습니다.</div>
+                                <div className="p-20 text-center text-gray-400 bg-white rounded-2xl border-2 border-dashed border-gray-200 font-black uppercase tracking-widest font-black font-bold">해당 카테고리에 등록된 상품 정보가 없습니다.</div>
                             )}
                         </main>
                     </div>
@@ -1060,22 +1294,35 @@
                                             )}
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    
+                                    <div>
+                                        <label className="text-xs font-black text-gray-500 mb-2 block font-bold">시즌 / 프로젝트 *</label>
+                                        <select value={productForm.project} onChange={(e) => setProductForm({...productForm, project: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-indigo-900 bg-indigo-50/50 shadow-sm transition-all" required>
+                                            <option value="" disabled>시즌 선택</option>
+                                            {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* [수정] 대분류/소분류 2단 선택 */}
+                                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-inner">
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 mb-2 block font-bold">시즌 / 프로젝트 *</label>
-                                            <select value={productForm.project} onChange={(e) => setProductForm({...productForm, project: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-indigo-900 bg-indigo-50/50 shadow-sm transition-all" required>
-                                                <option value="" disabled>시즌 선택</option>
-                                                {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
+                                            <label className="text-xs font-black text-gray-500 mb-2 block font-bold flex items-center gap-1"><FolderTree className="w-3 h-3"/> 카테고리 대분류 *</label>
+                                            <select value={productForm.mainCategory} onChange={(e) => handleMainCategoryChangeInForm(e.target.value)} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-slate-700 bg-white shadow-sm" required>
+                                                <option value="" disabled>대분류 선택</option>
+                                                {settings.categoryGroups.map(g => <option key={g.main} value={g.main}>{g.main}</option>)}
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-xs font-black text-gray-500 mb-2 block font-bold">카테고리 *</label>
-                                            <select value={productForm.category} onChange={(e) => handleCategoryChangeInForm(e.target.value)} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-slate-700 bg-gray-50 shadow-sm transition-all" required>
-                                                <option value="" disabled>카테고리 선택</option>
-                                                {settings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            <label className="text-xs font-black text-indigo-500 mb-2 block font-bold flex items-center gap-1"><Layers className="w-3 h-3"/> 상세 소분류 *</label>
+                                            <select value={productForm.category} onChange={(e) => handleCategoryChangeInForm(e.target.value)} className="w-full border border-indigo-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black text-indigo-900 bg-white shadow-sm" required>
+                                                <option value="" disabled>소분류 선택</option>
+                                                {settings.categoryGroups.find(g => g.main === productForm.mainCategory)?.subs.map(sub => (
+                                                    <option key={sub} value={sub}>{sub}</option>
+                                                ))}
                                             </select>
                                         </div>
                                     </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <input type="text" placeholder="상품명 입력" required value={productForm.name} onChange={(e) => setProductForm({...productForm, name: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black shadow-sm bg-white" />
                                         <input type="text" placeholder="옵션 정보 입력" value={productForm.option} onChange={(e) => setProductForm({...productForm, option: e.target.value})} className="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-black shadow-sm bg-white" />
@@ -1144,19 +1391,30 @@
                             </div>
                         </div>
                     )}
-                    {isSettingsOpen && (
-                        <SettingsModal 
-                            currentCategories={settings.categories} 
-                            currentCategoryFees={settings.categoryFees}
-                            currentCategoryRatios={settings.categoryRatios}
+                    
+                    {/* [변경] 시스템 설정 모달 연동 */}
+                    {isSystemSettingsOpen && (
+                        <SystemSettingsModal 
                             currentProjects={settings.projects}
                             currentTeam={settings.teamMembers}
                             userRole={userRole}
                             currentSecurity={security}
-                            onClose={() => setIsSettingsOpen(false)} 
-                            onSave={saveSettingsBatch}
+                            onClose={() => setIsSystemSettingsOpen(false)} 
+                            onSave={saveSystemSettings}
                         />
                     )}
+
+                    {/* [신규] 카테고리 설정 모달 연동 */}
+                    {isCategorySettingsOpen && (
+                        <CategorySettingsModal 
+                            currentGroups={settings.categoryGroups}
+                            currentFees={settings.categoryFees}
+                            currentRatios={settings.categoryRatios}
+                            onClose={() => setIsCategorySettingsOpen(false)} 
+                            onSave={saveCategorySettings}
+                        />
+                    )}
+
                     {isLogModalOpen && (
                         <LogModal logs={logs} onClose={() => setIsLogModalOpen(false)} />
                     )}
