@@ -13,7 +13,6 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 대량 등록을 위한 CSV 파서 추가 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
@@ -109,12 +108,13 @@
             FolderTree: (props) => <IconBase {...props}><path d="M20 10h-7V3"/><path d="M13 21v-7"/><path d="M4 21v-7h5"/><path d="M9 10H4V3h5"/></IconBase>,
             Eye: (props) => <IconBase {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>,
             Calendar: (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>,
-            ChevronsUpDown: (props) => <IconBase {...props}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></IconBase>
+            ChevronsUpDown: (props) => <IconBase {...props}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></IconBase>,
+            ArrowUpDown: (props) => <IconBase {...props}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>
         };
 
         const { 
             Package, Search, Check, X, Minus, Calculator, ImageIcon, Trash2, Plus, Settings, Edit2, 
-            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Upload, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw, Layers, FolderTree, Eye, Calendar, ChevronsUpDown
+            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Upload, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw, Layers, FolderTree, Eye, Calendar, ChevronsUpDown, ArrowUpDown
         } = Icons;
 
         class ErrorBoundary extends React.Component {
@@ -406,6 +406,10 @@
             const [previewImage, setPreviewImage] = useState(null);
             const [toast, setToast] = useState(null);
 
+            // 직접 순서 입력 상태 추가
+            const [editingNoId, setEditingNoId] = useState(null);
+            const [editingNoValue, setEditingNoValue] = useState("");
+
             // 일괄 삭제 및 카테고리 이동을 위한 상태
             const [selectedItems, setSelectedItems] = useState([]);
             const [isBulkMoveModalOpen, setIsBulkMoveModalOpen] = useState(false);
@@ -421,7 +425,8 @@
             const [productForm, setProductForm] = useState({ project: '', mainCategory: '', category: '', name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: [''] });
             const [lastTargetZone, setLastTargetZone] = useState('main');
 
-            const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
+            // 기본 정렬을 "내 임의 정렬 (수동)"으로 변경
+            const [sortConfig, setSortConfig] = useState({ key: 'customOrder', direction: 'asc' });
 
             // 탭, 카테고리, 필터 변경 시 선택된 항목 초기화
             useEffect(() => {
@@ -433,6 +438,7 @@
                 if (sortConfig.key === key && sortConfig.direction === 'desc') {
                     direction = 'asc';
                 }
+                if (key === 'customOrder') direction = 'asc';
                 setSortConfig({ key, direction });
             };
 
@@ -475,16 +481,17 @@
                 return () => window.removeEventListener('paste', handlePaste);
             }, [isAddModalOpen, lastTargetZone]);
 
-            const formatDate = (timestamp) => {
-                if (!timestamp) return '모름';
-                const date = new Date(timestamp);
-                if (isNaN(date.getTime())) return '모름';
-                const y = String(date.getFullYear()).slice(-2);
-                const m = String(date.getMonth() + 1).padStart(2, '0');
-                const d = String(date.getDate()).padStart(2, '0');
-                const hh = String(date.getHours()).padStart(2, '0');
-                const mm = String(date.getMinutes()).padStart(2, '0');
-                return `${y}-${m}-${d} ${hh}:${mm}`;
+            // 날짜와 시간을 분리하여 더 크게 보여주기 위한 새로운 포맷 함수
+            const formatDateTime = (timestamp) => {
+                if (!timestamp) return { date: '날짜모름', time: '' };
+                const dObj = new Date(timestamp);
+                if (isNaN(dObj.getTime())) return { date: '날짜모름', time: '' };
+                const y = String(dObj.getFullYear()).slice(-2);
+                const m = String(dObj.getMonth() + 1).padStart(2, '0');
+                const d = String(dObj.getDate()).padStart(2, '0');
+                const hh = String(dObj.getHours()).padStart(2, '0');
+                const mm = String(dObj.getMinutes()).padStart(2, '0');
+                return { date: `${y}-${m}-${d}`, time: `${hh}:${mm}` };
             };
 
             const showToast = (message, type = 'success') => {
@@ -561,13 +568,21 @@
                 }
                 if (filterStatus === 'confirmed') list = list.filter(p => p.isConfirmed);
                 else if (filterStatus === 'held') list = list.filter(p => p.isHeld && !p.isConfirmed);
+                else if (filterStatus === 'sample') list = list.filter(p => p.isSampleRequested);
                 else if (filterStatus === 'unconfirmed') list = list.filter(p => !p.isConfirmed && !p.isHeld);
                 
                 return list.sort((a, b) => {
-                    let aValue = a[sortConfig.key];
-                    let bValue = b[sortConfig.key];
+                    let aValue, bValue;
 
-                    if (sortConfig.key === 'margin') {
+                    if (sortConfig.key === 'customOrder') {
+                        // customOrder가 없으면 최신순(음수값)으로 임시 부여
+                        aValue = a.customOrder !== undefined ? a.customOrder : -(a.createdAt || 0);
+                        bValue = b.customOrder !== undefined ? b.customOrder : -(b.createdAt || 0);
+                        
+                        if (aValue === bValue) {
+                            return (b.createdAt || 0) - (a.createdAt || 0); // 동일할 경우 최신순 보조 정렬
+                        }
+                    } else if (sortConfig.key === 'margin') {
                         aValue = (a.price || 0) - (a.cost || 0);
                         bValue = (b.price || 0) - (b.cost || 0);
                     } else if (sortConfig.key === 'createdAt') {
@@ -576,16 +591,111 @@
                     } else if (sortConfig.key === 'updatedAt') {
                         aValue = a.updatedAt || a.createdAt || a.id || 0;
                         bValue = b.updatedAt || b.createdAt || b.id || 0;
+                    } else {
+                        aValue = a[sortConfig.key] || 0;
+                        bValue = b[sortConfig.key] || 0;
                     }
-
-                    if (aValue === undefined || aValue === null) aValue = 0;
-                    if (bValue === undefined || bValue === null) bValue = 0;
 
                     if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
                     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
                 });
             }, [displayProducts, activeProject, activeMainCategory, activeCategory, searchTerm, filterStatus, sortConfig]);
+
+            // 수동 순서 텍스트 클릭 시 입력 모드 활성화
+            const startEditingNo = (item, currentNo) => {
+                if (sortConfig.key !== 'customOrder' || sortConfig.direction !== 'asc') {
+                    showToast("오른쪽 위의 정렬 기준을 '내 임의 정렬 (수동)'으로 설정해야 순서를 바꿀 수 있습니다.", "error");
+                    return;
+                }
+                setEditingNoId(item.firebaseId);
+                setEditingNoValue(currentNo.toString());
+            };
+
+            // 원하는 번호로 즉시 순서 이동
+            const submitNewNo = async (item, currentIdx) => {
+                setEditingNoId(null);
+                const desiredNo = parseInt(editingNoValue, 10);
+                if (isNaN(desiredNo) || desiredNo <= 0) return;
+
+                const targetIdx = desiredNo - 1;
+                const maxIdx = filteredProducts.length - 1;
+                const clampedTargetIdx = Math.max(0, Math.min(targetIdx, maxIdx));
+
+                if (currentIdx === clampedTargetIdx) return; // 동일한 위치면 아무것도 안함
+
+                // 배열에서 해당 항목을 제외하고 나머지 항목들만 임시로 모음
+                const tempArray = filteredProducts.filter((_, idx) => idx !== currentIdx);
+
+                let newOrder;
+                if (clampedTargetIdx === 0) { // 가장 첫 번째로 이동
+                    const firstOrder = tempArray[0].customOrder !== undefined ? tempArray[0].customOrder : -(tempArray[0].createdAt || 0);
+                    newOrder = firstOrder - 1000;
+                } else if (clampedTargetIdx >= tempArray.length) { // 가장 마지막으로 이동
+                    const lastOrder = tempArray[tempArray.length - 1].customOrder !== undefined ? tempArray[tempArray.length - 1].customOrder : -(tempArray[tempArray.length - 1].createdAt || 0);
+                    newOrder = lastOrder + 1000;
+                } else { // 특정 항목들 사이로 쏙 들어감
+                    const beforeOrder = tempArray[clampedTargetIdx - 1].customOrder !== undefined ? tempArray[clampedTargetIdx - 1].customOrder : -(tempArray[clampedTargetIdx - 1].createdAt || 0);
+                    const afterOrder = tempArray[clampedTargetIdx].customOrder !== undefined ? tempArray[clampedTargetIdx].customOrder : -(tempArray[clampedTargetIdx].createdAt || 0);
+                    newOrder = (beforeOrder + afterOrder) / 2;
+                }
+
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { 
+                        customOrder: newOrder, 
+                        updatedAt: Date.now() 
+                    });
+                    showToast(`${desiredNo}번 위치로 즉시 이동되었습니다.`);
+                } catch(e) {
+                    console.error(e);
+                    showToast("순서 변경 중 오류가 발생했습니다.", "error");
+                }
+            };
+
+            // 수동 위/아래 순서 변경 핸들러
+            const handleMoveOrder = async (idx, direction) => {
+                if (sortConfig.key !== 'customOrder' || sortConfig.direction !== 'asc') {
+                    showToast("오른쪽 위의 정렬 기준을 '내 임의 정렬 (수동)'으로 설정해야 순서를 바꿀 수 있습니다.", "error");
+                    return;
+                }
+
+                const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+                if (targetIdx < 0 || targetIdx >= filteredProducts.length) return;
+
+                const currentItem = filteredProducts[idx];
+                const targetItem = filteredProducts[targetIdx];
+                
+                let newOrder;
+                if (direction === 'up') {
+                    const beforeTarget = filteredProducts[targetIdx - 1];
+                    const targetOrder = targetItem.customOrder !== undefined ? targetItem.customOrder : -(targetItem.createdAt || 0);
+                    if (beforeTarget) {
+                        const beforeOrder = beforeTarget.customOrder !== undefined ? beforeTarget.customOrder : -(beforeTarget.createdAt || 0);
+                        newOrder = (beforeOrder + targetOrder) / 2;
+                    } else {
+                        newOrder = targetOrder - 1000;
+                    }
+                } else {
+                    const afterTarget = filteredProducts[targetIdx + 1];
+                    const targetOrder = targetItem.customOrder !== undefined ? targetItem.customOrder : -(targetItem.createdAt || 0);
+                    if (afterTarget) {
+                        const afterOrder = afterTarget.customOrder !== undefined ? afterTarget.customOrder : -(afterTarget.createdAt || 0);
+                        newOrder = (targetOrder + afterOrder) / 2;
+                    } else {
+                        newOrder = targetOrder + 1000;
+                    }
+                }
+
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.firebaseId), { 
+                        customOrder: newOrder, 
+                        updatedAt: Date.now() 
+                    });
+                } catch(e) {
+                    console.error(e);
+                    showToast("순서 변경 중 오류가 발생했습니다.", "error");
+                }
+            };
 
             const categoryCounts = useMemo(() => {
                 const counts = { main: {}, sub: {} };
@@ -595,6 +705,7 @@
 
                     if (filterStatus === 'confirmed' && !p.isConfirmed) return;
                     if (filterStatus === 'held' && (!p.isHeld || p.isConfirmed)) return;
+                    if (filterStatus === 'sample' && !p.isSampleRequested) return;
                     if (filterStatus === 'unconfirmed' && (p.isConfirmed || p.isHeld)) return;
 
                     const mainCat = p.mappedMainCategory;
@@ -621,7 +732,7 @@
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload);
                 } else {
                     const newItemCode = generateItemCode();
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, itemCode: newItemCode, createdAt: Date.now(), isConfirmed: false, isHeld: false, isDeleted: false, approvals: {} });
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, itemCode: newItemCode, createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleRequested: false, isDeleted: false, approvals: {} });
                 }
                 setIsAddModalOpen(false);
                 showToast("저장되었습니다.");
@@ -828,6 +939,7 @@
                                         createdAt: Date.now(),
                                         isConfirmed: false,
                                         isHeld: false,
+                                        isSampleRequested: false,
                                         isDeleted: false,
                                         approvals: defaultApprovals
                                     });
@@ -880,6 +992,12 @@
 
             const toggleHold = async (item) => {
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isHeld: !item.isHeld, isConfirmed: false, updatedAt: Date.now() });
+            };
+
+            // 샘플 신청 토글 함수 추가
+            const toggleSample = async (item) => {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isSampleRequested: !item.isSampleRequested, updatedAt: Date.now() });
+                showToast(item.isSampleRequested ? "샘플 신청이 취소되었습니다." : "샘플이 신청되었습니다.");
             };
 
             const saveSystemSettings = async (newProjects, newTeam, newSecurity) => {
@@ -941,6 +1059,10 @@
                                 </button>
                                 <button onClick={() => handleFilterClick('held')} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center font-black ${filterStatus === 'held' ? 'bg-amber-100 text-amber-700' : 'hover:bg-gray-100'}`}>
                                     보류건<span>{displayProducts.filter(p => !p.isDeleted && p.isHeld && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                </button>
+                                {/* 샘플신청 필터 추가 */}
+                                <button onClick={() => handleFilterClick('sample')} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center font-black ${filterStatus === 'sample' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}>
+                                    샘플신청<span>{displayProducts.filter(p => !p.isDeleted && p.isSampleRequested && (activeProject === "전체" || p.project === activeProject)).length}</span>
                                 </button>
                             </div>
                             <div className="px-3 font-black">
@@ -1012,6 +1134,28 @@
                                 </h2>
                             </div>
                             <div className="flex items-center gap-3 font-black">
+                                {/* 정렬 순서 드롭다운 추가 */}
+                                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer mr-2 shadow-sm">
+                                    <ArrowUpDown className="w-4 h-4 text-gray-500 font-black" />
+                                    <select 
+                                        value={`${sortConfig.key}-${sortConfig.direction}`}
+                                        onChange={(e) => {
+                                            const [key, direction] = e.target.value.split('-');
+                                            setSortConfig({ key, direction });
+                                        }}
+                                        className="bg-transparent border-none text-sm outline-none font-black text-gray-700 cursor-pointer appearance-none"
+                                    >
+                                        <option value="customOrder-asc">내 임의 정렬 (수동)</option>
+                                        <option value="createdAt-desc">최신 등록순</option>
+                                        <option value="createdAt-asc">오래된 등록순</option>
+                                        <option value="price-desc">판매가 높은순</option>
+                                        <option value="price-asc">판매가 낮은순</option>
+                                        <option value="margin-desc">마진(수익) 높은순</option>
+                                        <option value="cost-desc">도착가 높은순</option>
+                                        <option value="cost-asc">도착가 낮은순</option>
+                                    </select>
+                                </div>
+
                                 <div className="relative font-black">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 font-black" />
                                     <input type="text" placeholder="통합 검색 (코드/상품명)..." className="pl-9 pr-4 py-2 bg-gray-100 rounded-lg text-sm w-64 outline-none font-black font-black font-black" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
@@ -1052,14 +1196,16 @@
                                                     className="w-4 h-4 accent-indigo-600 cursor-pointer"
                                                 />
                                             </th>
-                                            <th className="px-2 py-4 w-12 text-center font-black">No</th>
+                                            <th className="px-2 py-4 w-16 text-center font-black">No</th>
+                                            {/* 순서 변경 열 추가 */}
+                                            <th className="px-2 py-4 w-16 text-center font-black">순서</th>
                                             <th className="px-2 py-4 w-24 text-center font-black">이미지</th>
                                             <th className="px-6 py-4 font-black">상품 정보</th>
                                             <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('createdAt')}>
-                                                <div className="flex items-center justify-center gap-1">등록일 {sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                <div className="flex items-center justify-center gap-1">등록일시 {sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
                                             </th>
                                             <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('updatedAt')}>
-                                                <div className="flex items-center justify-center gap-1">수정일 {sortConfig.key === 'updatedAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                <div className="flex items-center justify-center gap-1">수정일시 {sortConfig.key === 'updatedAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
                                             </th>
                                             <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('cost')}>
                                                 <div className="flex items-center justify-end gap-1">도착가 {sortConfig.key === 'cost' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
@@ -1071,7 +1217,7 @@
                                                 <div className="flex items-center justify-end gap-1">마진(수익) {sortConfig.key === 'margin' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
                                             </th>
                                             {settings.teamMembers.map(m => <th key={m.key} className="px-3 py-4 text-center w-16 font-black">{m.label}</th>)}
-                                            <th className="px-6 py-4 text-center w-32 font-black">관리</th>
+                                            <th className="px-6 py-4 text-center w-64 font-black">관리</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 font-black">
@@ -1086,7 +1232,43 @@
                                                         className="w-4 h-4 accent-indigo-600 cursor-pointer"
                                                     />
                                                 </td>
-                                                <td className="px-2 py-4 text-center text-gray-400 font-mono text-xs font-black">{idx + 1}</td>
+                                                {/* No 입력 부분 (직접 번호 지정 기능) */}
+                                                <td className="px-2 py-4 text-center font-black">
+                                                    {editingNoId === item.firebaseId ? (
+                                                        <input 
+                                                            type="number" 
+                                                            value={editingNoValue}
+                                                            onChange={(e) => setEditingNoValue(e.target.value)}
+                                                            onBlur={() => submitNewNo(item, idx)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') submitNewNo(item, idx); else if (e.key === 'Escape') setEditingNoId(null); }}
+                                                            className="w-12 text-center border-2 border-indigo-400 rounded outline-none font-black text-indigo-700 py-1"
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div 
+                                                            onClick={() => startEditingNo(item, idx + 1)}
+                                                            className={`inline-block px-2 py-1.5 rounded cursor-pointer font-mono text-sm font-black transition-all ${sortConfig.key === 'customOrder' ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:scale-110 border border-indigo-100 shadow-sm' : 'text-gray-400'}`}
+                                                            title={sortConfig.key === 'customOrder' ? "숫자를 클릭하여 원하는 순서로 즉시 이동" : "수동 정렬 모드에서만 순서 이동 가능"}
+                                                        >
+                                                            {idx + 1}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                {/* 수동 정렬 버튼 (위/아래 이동) */}
+                                                <td className="px-2 py-4 text-center">
+                                                    {sortConfig.key === 'customOrder' && sortConfig.direction === 'asc' ? (
+                                                        <div className="flex flex-col items-center justify-center gap-1">
+                                                            <button onClick={() => handleMoveOrder(idx, 'up')} disabled={idx === 0} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border border-gray-200">
+                                                                <ChevronUp className="w-4 h-4 font-black" />
+                                                            </button>
+                                                            <button onClick={() => handleMoveOrder(idx, 'down')} disabled={idx === filteredProducts.length - 1} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border border-gray-200">
+                                                                <ChevronDown className="w-4 h-4 font-black" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-300">-</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-2 py-4 font-black">
                                                     <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border cursor-pointer relative group shadow-inner font-black" onClick={() => item.image && setPreviewImage(item.image)}>
                                                         {item.image ? <img src={item.image} className="w-full h-full object-cover font-black" /> : <ImageIcon className="w-6 h-6 m-auto mt-5 text-gray-200 font-black"/>}
@@ -1099,32 +1281,49 @@
                                                             <span className="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-100 font-black font-black">{item.project}</span>
                                                             <span className="text-[9px] text-gray-400 font-black">{item.mappedMainCategory} > {item.mappedSubCategory}</span>
                                                         </div>
-                                                        <div className="font-black text-gray-900 line-clamp-1 font-black flex items-center gap-2">
+                                                        <div className="font-black text-gray-900 line-clamp-1 font-black flex items-center gap-2 text-base">
                                                             <span className="text-[9px] text-gray-400 font-mono border border-gray-200 px-1 rounded bg-gray-50">#{item.itemCode || item.firebaseId.slice(-6).toUpperCase()}</span>
                                                             {item.name}
                                                         </div>
-                                                        <div className="text-xs text-gray-400 italic line-clamp-1 font-black font-black">{item.option || '옵션없음'}</div>
+                                                        <div className="text-xs text-gray-400 italic line-clamp-1 font-black font-black mt-1">{item.option || '옵션없음'}</div>
                                                         <div className="flex gap-1.5 mt-2 font-black">
                                                             {(item.links || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-orange-50 text-orange-600 text-[9px] px-1.5 py-0.5 rounded border border-orange-100 font-black font-black">소싱 #{i+1}</a>)}
                                                             {(item.naverLinks || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-green-50 text-green-600 text-[9px] px-1.5 py-0.5 rounded border border-green-100 font-black font-black">경쟁 #{i+1}</a>)}
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-4 text-center whitespace-nowrap">
-                                                    <span className="text-[10px] text-gray-500 font-mono font-black">{formatDate(item.createdAt || item.id)}</span>
+                                                {/* 날짜 크기 변경 및 줄바꿈 적용 */}
+                                                <td className="px-4 py-4 text-center">
+                                                    {(() => {
+                                                        const dt = formatDateTime(item.createdAt || item.id);
+                                                        return (
+                                                            <div className="flex flex-col items-center justify-center gap-1">
+                                                                <span className="text-[15px] text-gray-800 font-black tracking-wider">{dt.date}</span>
+                                                                <span className="text-xs text-gray-500 font-black font-mono">{dt.time}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
-                                                <td className="px-4 py-4 text-center whitespace-nowrap">
-                                                    <span className="text-[10px] text-gray-500 font-mono font-black">{formatDate(item.updatedAt || item.createdAt || item.id)}</span>
+                                                <td className="px-4 py-4 text-center">
+                                                    {(() => {
+                                                        const dt = formatDateTime(item.updatedAt || item.createdAt || item.id);
+                                                        return (
+                                                            <div className="flex flex-col items-center justify-center gap-1">
+                                                                <span className="text-[15px] text-gray-800 font-black tracking-wider">{dt.date}</span>
+                                                                <span className="text-xs text-gray-500 font-black font-mono">{dt.time}</span>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-4 py-4 text-right font-black">
-                                                    <div className="text-gray-600 font-mono font-black">{item.cost?.toLocaleString()}원</div>
+                                                    <div className="text-gray-600 font-mono font-black text-base">{item.cost?.toLocaleString()}원</div>
                                                 </td>
                                                 <td className="px-4 py-4 text-right font-black">
-                                                    <div className="text-indigo-600 font-black font-mono text-base">{item.price?.toLocaleString()}원</div>
+                                                    <div className="text-indigo-600 font-black font-mono text-lg">{item.price?.toLocaleString()}원</div>
                                                 </td>
                                                 <td className="px-4 py-4 text-right font-black">
-                                                    <div className="font-mono text-gray-800 font-black">{(item.price - item.cost)?.toLocaleString()}원</div>
-                                                    <div className="text-[10px] text-gray-400 font-mono font-black font-black">({item.price ? (((item.price - item.cost) / item.price) * 100).toFixed(1) : 0}%)</div>
+                                                    <div className="font-mono text-gray-800 font-black text-base">{(item.price - item.cost)?.toLocaleString()}원</div>
+                                                    <div className="text-[11px] text-gray-400 font-mono font-black font-black mt-1">({item.price ? (((item.price - item.cost) / item.price) * 100).toFixed(1) : 0}%)</div>
                                                 </td>
                                                 {settings.teamMembers.map(m => (
                                                     <td key={m.key} className="px-3 py-4 text-center font-black">
@@ -1132,11 +1331,13 @@
                                                     </td>
                                                 ))}
                                                 <td className="px-6 py-4 font-black">
-                                                    <div className="flex gap-1.5 justify-center font-black font-black font-black font-black">
-                                                        <button onClick={() => toggleConfirm(item)} className={`p-2 rounded-lg transition-all font-black font-black font-black ${item.isConfirmed ? 'bg-green-600 text-white shadow-md font-black font-black' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 font-black font-black'}`} title="확정"><CheckCircle className="w-4 h-4 font-black"/></button>
-                                                        <button onClick={() => toggleHold(item)} className={`p-2 rounded-lg transition-all font-black font-black font-black ${item.isHeld ? 'bg-amber-500 text-white shadow-md font-black font-black' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 font-black font-black'}`} title="보류"><Clock className="w-4 h-4 font-black"/></button>
-                                                        <button onClick={() => { setEditingItem(item); setProductForm({ ...item, links: item.links || [''], naverLinks: item.naverLinks || [''] }); setIsAddModalOpen(true); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all font-black font-black font-black" title="수정"><Edit2 className="w-4 h-4 font-black"/></button>
-                                                        <button onClick={async () => { if(confirm('삭제하시겠습니까?')) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: true, updatedAt: Date.now() }); showToast("휴지통으로 이동되었습니다."); } }} className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all font-black font-black font-black" title="삭제"><Trash2 className="w-4 h-4 font-black"/></button>
+                                                    <div className="flex flex-wrap gap-1.5 justify-center font-black">
+                                                        <button onClick={() => toggleConfirm(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all font-black ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="확정"><CheckCircle className="w-3.5 h-3.5"/> 확정</button>
+                                                        <button onClick={() => toggleHold(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all font-black ${item.isHeld ? 'bg-amber-500 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="보류"><Clock className="w-3.5 h-3.5"/> 보류</button>
+                                                        {/* 샘플신청 버튼 추가 */}
+                                                        <button onClick={() => toggleSample(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all font-black ${item.isSampleRequested ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="샘플신청"><Truck className="w-3.5 h-3.5"/> 샘플</button>
+                                                        <button onClick={() => { setEditingItem(item); setProductForm({ ...item, links: item.links || [''], naverLinks: item.naverLinks || [''] }); setIsAddModalOpen(true); }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all font-black" title="수정"><Edit2 className="w-3.5 h-3.5"/> 수정</button>
+                                                        <button onClick={async () => { if(confirm('삭제하시겠습니까?')) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: true, updatedAt: Date.now() }); showToast("휴지통으로 이동되었습니다."); } }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all font-black" title="삭제"><Trash2 className="w-3.5 h-3.5"/> 삭제</button>
                                                     </div>
                                                 </td>
                                             </tr>
