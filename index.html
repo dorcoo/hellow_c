@@ -41,6 +41,12 @@
             from { transform: translateY(100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
+        
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
     </style>
 
     <script type="module">
@@ -280,6 +286,41 @@
             const [fees, setFees] = useState({ ...currentFees });
             const [ratios, setRatios] = useState({ ...currentRatios });
 
+            // 대분류 순서 변경
+            const moveGroup = (index, direction) => {
+                const newGroups = [...groups];
+                const newIndex = direction === 'up' ? index - 1 : index + 1;
+                if (newIndex < 0 || newIndex >= newGroups.length) return;
+                [newGroups[index], newGroups[newIndex]] = [newGroups[newIndex], newGroups[index]];
+                setGroups(newGroups);
+            };
+
+            // 소분류 순서 변경
+            const moveSubCat = (groupIndex, subIndex, direction) => {
+                const newGroups = [...groups];
+                const subs = newGroups[groupIndex].subs;
+                const newIndex = direction === 'up' ? subIndex - 1 : subIndex + 1;
+                if (newIndex < 0 || newIndex >= subs.length) return;
+                [subs[subIndex], subs[newIndex]] = [subs[newIndex], subs[subIndex]];
+                setGroups(newGroups);
+            };
+
+            // 소분류 이름 변경 시 비용/비율 데이터 유지
+            const updateSubName = (gIdx, sIdx, oldVal, newVal) => {
+                const newGroups = [...groups];
+                newGroups[gIdx].subs[sIdx] = newVal;
+                setGroups(newGroups);
+                
+                if (oldVal !== newVal) {
+                    const newFees = { ...fees };
+                    const newRatios = { ...ratios };
+                    if (newFees[oldVal] !== undefined) { newFees[newVal] = newFees[oldVal]; delete newFees[oldVal]; }
+                    if (newRatios[oldVal] !== undefined) { newRatios[newVal] = newRatios[oldVal]; delete newRatios[oldVal]; }
+                    setFees(newFees);
+                    setRatios(newRatios);
+                }
+            };
+
             const handleSave = (bulk) => onSave(groups, fees, ratios, bulk);
 
             return (
@@ -287,35 +328,56 @@
                     <div className="bg-white rounded-2xl w-full max-w-4xl p-6 shadow-xl flex flex-col h-[80vh]">
                         <div className="flex justify-between items-center mb-6 border-b pb-4">
                             <h3 className="text-xl font-black uppercase text-indigo-900 flex items-center gap-2 font-black"><FolderTree className="w-6 h-6"/>카테고리 및 원가공식</h3>
-                            <button onClick={onClose}><X className="w-6 h-6"/></button>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">
                             {groups.map((g, gIdx) => (
                                 <div key={gIdx} className="bg-gray-50 p-4 rounded-xl border">
-                                    <div className="flex items-center gap-2 mb-4 font-black">
-                                        <input value={g.main} onChange={(e) => { const n = [...groups]; n[gIdx].main = e.target.value; setGroups(n); }} className="bg-transparent font-black text-indigo-900 text-lg outline-none" />
-                                        <button onClick={() => setGroups(groups.filter((_, i) => i !== gIdx))} className="text-red-300 ml-auto font-black"><Trash2 className="w-4 h-4"/></button>
+                                    {/* 대분류 헤더 영역 */}
+                                    <div className="flex items-center gap-3 mb-4 font-black">
+                                        <div className="flex flex-col gap-0.5 opacity-40 hover:opacity-100 font-bold transition-opacity">
+                                            <button onClick={() => moveGroup(gIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-4 h-4"/></button>
+                                            <button onClick={() => moveGroup(gIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-4 h-4"/></button>
+                                        </div>
+                                        <Layers className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                                        <input value={g.main} onChange={(e) => { const n = [...groups]; n[gIdx].main = e.target.value; setGroups(n); }} className="bg-transparent font-black text-indigo-900 text-lg outline-none flex-1 border-b border-transparent focus:border-indigo-200" placeholder="대분류명" />
+                                        <button onClick={() => setGroups(groups.filter((_, i) => i !== gIdx))} className="text-red-300 ml-auto font-black bg-white hover:text-red-500 p-1.5 rounded transition-colors"><Trash2 className="w-5 h-5"/></button>
                                     </div>
-                                    <div className="space-y-2 pl-4">
+                                    
+                                    {/* 소분류 아이템 영역 */}
+                                    <div className="space-y-2 pl-8">
                                         {g.subs.map((sub, sIdx) => (
-                                            <div key={sIdx} className="flex items-center gap-4 bg-white p-2 rounded border text-xs font-black">
-                                                <input value={sub} onChange={(e) => { const n = [...groups]; n[gIdx].subs[sIdx] = e.target.value; setGroups(n); }} className="w-32 border-b font-black" />
-                                                <div className="flex items-center gap-1 font-black"><span>배율:</span><input type="number" step="0.01" value={ratios[sub] || 1} onChange={(e) => setRatios({...ratios, [sub]: Number(e.target.value)})} className="w-16 border rounded px-1 font-black"/></div>
-                                                <div className="flex items-center gap-1 font-black"><span>고정비:</span><input type="number" value={fees[sub] || 0} onChange={(e) => setFees({...fees, [sub]: Number(e.target.value)})} className="w-20 border rounded px-1 font-black"/></div>
-                                                <button onClick={() => { const n = [...groups]; n[gIdx].subs.splice(sIdx, 1); setGroups(n); }} className="text-gray-300 ml-auto font-black"><X className="w-3 h-3"/></button>
+                                            <div key={sIdx} className="flex items-center gap-4 bg-white p-2 rounded border text-xs font-black group shadow-sm hover:border-indigo-200 transition-colors">
+                                                <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 font-bold transition-opacity">
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-3 h-3"/></button>
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-3 h-3"/></button>
+                                                </div>
+                                                <input value={sub} onChange={(e) => updateSubName(gIdx, sIdx, sub, e.target.value)} className="w-32 border border-gray-200 focus:border-indigo-400 rounded p-1.5 font-black outline-none" placeholder="소분류명" />
+                                                <div className="flex items-center gap-1 font-black">
+                                                    <span className="text-gray-500 text-[10px]">배율:</span>
+                                                    <input type="number" step="0.01" value={ratios[sub] || 1} onChange={(e) => setRatios({...ratios, [sub]: Number(e.target.value)})} className="w-16 border border-gray-200 rounded px-1.5 py-1 font-black outline-none focus:border-amber-400 text-amber-700"/>
+                                                </div>
+                                                <div className="flex items-center gap-1 font-black">
+                                                    <span className="text-gray-500 text-[10px]">고정비:</span>
+                                                    <input type="number" value={fees[sub] || 0} onChange={(e) => setFees({...fees, [sub]: Number(e.target.value)})} className="w-24 border border-gray-200 rounded px-1.5 py-1 font-black outline-none focus:border-indigo-400 text-indigo-700"/>
+                                                </div>
+                                                <div className="flex-1"></div>
+                                                <button onClick={() => { const n = [...groups]; n[gIdx].subs.splice(sIdx, 1); setGroups(n); }} className="text-gray-300 font-black hover:text-red-500 transition-colors"><X className="w-4 h-4"/></button>
                                             </div>
                                         ))}
-                                        <button onClick={() => { const n = [...groups]; n[gIdx].subs.push("새 소분류"); setGroups(n); }} className="w-full py-1 border border-dashed text-[10px] text-gray-400 font-black">+ 소분류 추가</button>
+                                        <button onClick={() => { const n = [...groups]; n[gIdx].subs.push("새 소분류"); setGroups(n); }} className="w-full py-2 border-2 border-dashed border-gray-200 bg-white rounded-xl text-[10px] text-gray-400 font-black hover:border-indigo-400 hover:text-indigo-500 transition-all">+ 소분류 추가</button>
                                     </div>
                                 </div>
                             ))}
-                            <button onClick={() => setGroups([...groups, { main: "새 대분류", subs: [] }])} className="w-full py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-xl font-black">+ 대분류 추가</button>
+                            <button onClick={() => setGroups([...groups, { main: "새 대분류", subs: [] }])} className="w-full py-4 border-2 border-dashed border-indigo-200 text-indigo-500 bg-indigo-50/50 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-indigo-100 transition-all"><Plus className="w-5 h-5"/> 대분류 추가</button>
                         </div>
-                        <div className="flex flex-col gap-2 mt-6 pt-4 border-t font-black">
-                            <button onClick={() => handleSave(true)} className="w-full bg-amber-500 text-white py-2 rounded-lg text-xs font-black shadow font-black">현재 수정한 공식을 기존 상품들에 일괄 적용</button>
+                        <div className="flex flex-col gap-3 mt-6 pt-4 border-t font-black">
+                            <button onClick={() => handleSave(true)} className="w-full bg-amber-500 text-white py-3 rounded-lg text-sm font-black shadow hover:bg-amber-600 transition-colors flex justify-center items-center gap-2">
+                                <RefreshCw className="w-4 h-4" /> 현재 수정한 공식을 기존 상품들에 일괄 적용
+                            </button>
                             <div className="flex gap-4">
-                                <button onClick={onClose} className="flex-1 bg-gray-100 py-3 rounded-xl font-black">취소</button>
-                                <button onClick={() => handleSave(false)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3 rounded-xl shadow-lg font-black">설정 저장</button>
+                                <button onClick={onClose} className="flex-1 bg-gray-100 py-3 rounded-xl font-black text-gray-500 hover:bg-gray-200">취소</button>
+                                <button onClick={() => handleSave(false)} className="flex-2 grow-[2] bg-indigo-600 text-white py-3 rounded-xl shadow-lg font-black hover:bg-indigo-700">설정만 저장</button>
                             </div>
                         </div>
                     </div>
@@ -344,6 +406,11 @@
             const [previewImage, setPreviewImage] = useState(null);
             const [toast, setToast] = useState(null);
 
+            // 일괄 삭제 및 카테고리 이동을 위한 상태
+            const [selectedItems, setSelectedItems] = useState([]);
+            const [isBulkMoveModalOpen, setIsBulkMoveModalOpen] = useState(false);
+            const [bulkMoveTarget, setBulkMoveTarget] = useState({ project: '', mainCategory: '', category: '' });
+
             const fileInputRef = useRef(null);
 
             const [products, setProducts] = useState([]);
@@ -355,6 +422,11 @@
             const [lastTargetZone, setLastTargetZone] = useState('main');
 
             const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
+
+            // 탭, 카테고리, 필터 변경 시 선택된 항목 초기화
+            useEffect(() => {
+                setSelectedItems([]);
+            }, [activeProject, activeMainCategory, activeCategory, filterStatus]);
 
             const handleSort = (key) => {
                 let direction = 'desc';
@@ -555,6 +627,102 @@
                 showToast("저장되었습니다.");
             };
 
+            // 체크박스 핸들러
+            const handleSelectAll = (e) => {
+                if (e.target.checked) {
+                    setSelectedItems(filteredProducts.map(p => p.firebaseId));
+                } else {
+                    setSelectedItems([]);
+                }
+            };
+
+            const handleSelectItem = (id) => {
+                setSelectedItems(prev => {
+                    if (prev.includes(id)) {
+                        return prev.filter(item => item !== id);
+                    } else {
+                        return [...prev, id];
+                    }
+                });
+            };
+
+            // 일괄 삭제 처리
+            const handleBulkDelete = async () => {
+                if (!confirm(`선택한 ${selectedItems.length}개 상품을 정말 삭제하시겠습니까?`)) return;
+                try {
+                    const MAX_BATCH_SIZE = 400;
+                    let batches = [];
+                    let currentBatch = writeBatch(db);
+                    let operationCount = 0;
+
+                    for (const id of selectedItems) {
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
+                        currentBatch.update(docRef, { isDeleted: true, updatedAt: Date.now() });
+                        operationCount++;
+                        
+                        if (operationCount >= MAX_BATCH_SIZE) {
+                            batches.push(currentBatch);
+                            currentBatch = writeBatch(db);
+                            operationCount = 0;
+                        }
+                    }
+                    
+                    if (operationCount > 0) batches.push(currentBatch);
+                    
+                    for (const batch of batches) await batch.commit();
+
+                    setSelectedItems([]);
+                    showToast(`선택한 ${selectedItems.length}개 항목이 휴지통으로 이동되었습니다.`);
+                } catch (e) {
+                    console.error(e);
+                    showToast("일괄 삭제 중 오류가 발생했습니다.", "error");
+                }
+            };
+
+            // 일괄 카테고리 이동 처리
+            const handleBulkMove = async (e) => {
+                e.preventDefault();
+                if (!bulkMoveTarget.project || !bulkMoveTarget.mainCategory || !bulkMoveTarget.category) {
+                    showToast("모든 항목을 선택해주세요.", "error");
+                    return;
+                }
+                try {
+                    const MAX_BATCH_SIZE = 400;
+                    let batches = [];
+                    let currentBatch = writeBatch(db);
+                    let operationCount = 0;
+
+                    for (const id of selectedItems) {
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
+                        currentBatch.update(docRef, {
+                            project: bulkMoveTarget.project,
+                            mainCategory: bulkMoveTarget.mainCategory,
+                            category: bulkMoveTarget.category,
+                            updatedAt: Date.now()
+                        });
+                        operationCount++;
+                        
+                        if (operationCount >= MAX_BATCH_SIZE) {
+                            batches.push(currentBatch);
+                            currentBatch = writeBatch(db);
+                            operationCount = 0;
+                        }
+                    }
+                    
+                    if (operationCount > 0) batches.push(currentBatch);
+                    
+                    for (const batch of batches) await batch.commit();
+
+                    setIsBulkMoveModalOpen(false);
+                    setSelectedItems([]);
+                    showToast(`선택한 ${selectedItems.length}개 항목의 카테고리가 변경되었습니다.`);
+                } catch (e) {
+                    console.error(e);
+                    showToast("일괄 이동 중 오류가 발생했습니다.", "error");
+                }
+            };
+
+
             const handleDownloadTemplate = () => {
                 const headers = ["상품코드", "프로젝트", "대분류", "소분류", "상품명", "옵션", "위안가", "도착가", "판매가", "소싱링크", "경쟁사링크"];
                 const example = ["", "2026 여름", "기본 분류", "아쿠아슈즈", "예시 상품명", "빨강/L", "10.5", "5000", "15000", "http://1688.com/... | http://taobao.com/...", "http://smartstore/..."];
@@ -598,18 +766,30 @@
                 
                 Papa.parse(file, {
                     header: true,
-                    skipEmptyLines: true,
+                    skipEmptyLines: 'greedy', 
+                    quoteChar: '"',
+                    escapeChar: '"',
                     complete: async (results) => {
                         try {
-                            const batch = writeBatch(db);
+                            const MAX_BATCH_SIZE = 400; 
+                            let batches = [];
+                            let currentBatch = writeBatch(db);
+                            let operationCount = 0;
+
                             let addCount = 0;
                             let updateCount = 0;
                             const defaultApprovals = settings.teamMembers.reduce((acc, m) => ({...acc, [m.key]: 'pending'}), {});
                             
                             results.data.forEach(row => {
-                                if (!row['상품명'] || !row['상품명'].trim()) return;
+                                const cleanRow = {};
+                                Object.keys(row).forEach(k => {
+                                    const cleanKey = k.trim().replace(/^\uFEFF/, '');
+                                    cleanRow[cleanKey] = row[k];
+                                });
+
+                                if (!cleanRow['상품명'] || !cleanRow['상품명'].trim()) return;
                                 
-                                const existingCode = row['상품코드'] ? row['상품코드'].trim() : null;
+                                const existingCode = cleanRow['상품코드'] ? cleanRow['상품코드'].trim() : null;
                                 let existingDoc = null;
                                 
                                 if (existingCode) {
@@ -617,28 +797,32 @@
                                 }
                                 
                                 const payload = {
-                                    project: row['프로젝트'] || '',
-                                    mainCategory: row['대분류'] || '',
-                                    category: row['소분류'] || '',
-                                    name: row['상품명'] || '',
-                                    option: row['옵션'] || '',
-                                    cny: Number(row['위안가']) || 0,
-                                    cost: Number(row['도착가']) || 0,
-                                    price: Number(row['판매가']) || 0,
-                                    links: row['소싱링크'] ? row['소싱링크'].split('|').map(s=>s.trim()).filter(Boolean) : [],
-                                    naverLinks: row['경쟁사링크'] ? row['경쟁사링크'].split('|').map(s=>s.trim()).filter(Boolean) : [],
+                                    project: cleanRow['프로젝트'] || '',
+                                    mainCategory: cleanRow['대분류'] || '',
+                                    category: cleanRow['소분류'] || '',
+                                    name: cleanRow['상품명'] ? cleanRow['상품명'].replace(/^"|"$/g, '').trim() : '',
+                                    option: cleanRow['옵션'] ? cleanRow['옵션'].replace(/^"|"$/g, '').trim() : '',
+                                    cny: Number(cleanRow['위안가']) || 0,
+                                    cost: Number(cleanRow['도착가']) || 0,
+                                    price: Number(cleanRow['판매가']) || 0,
+                                    links: cleanRow['소싱링크'] ? cleanRow['소싱링크'].replace(/^"|"$/g, '').split('|').map(s=>s.trim()).filter(Boolean) : [],
+                                    naverLinks: cleanRow['경쟁사링크'] ? cleanRow['경쟁사링크'].replace(/^"|"$/g, '').split('|').map(s=>s.trim()).filter(Boolean) : [],
                                     updatedAt: Date.now()
                                 };
 
+                                if (operationCount >= MAX_BATCH_SIZE) {
+                                    batches.push(currentBatch);
+                                    currentBatch = writeBatch(db);
+                                    operationCount = 0;
+                                }
+
                                 if (existingDoc) {
-                                    // 기존 상품 수정
                                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', existingDoc.firebaseId);
-                                    batch.update(docRef, payload);
+                                    currentBatch.update(docRef, payload);
                                     updateCount++;
                                 } else {
-                                    // 신규 등록
                                     const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'products'));
-                                    batch.set(docRef, {
+                                    currentBatch.set(docRef, {
                                         ...payload,
                                         itemCode: existingCode || generateItemCode(),
                                         createdAt: Date.now(),
@@ -649,19 +833,28 @@
                                     });
                                     addCount++;
                                 }
+                                operationCount++;
                             });
                             
-                            if (addCount > 0 || updateCount > 0) {
-                                await batch.commit();
+                            if (operationCount > 0) {
+                                batches.push(currentBatch);
+                            }
+
+                            if (batches.length > 0) {
+                                showToast(`데이터 업로드 중... (총 ${addCount + updateCount}건)`);
+                                for (const batch of batches) {
+                                    await batch.commit();
+                                }
                                 showToast(`신규등록 ${addCount}건, 수정 ${updateCount}건 완료되었습니다.`);
                             } else {
-                                showToast("등록할 데이터가 없습니다.", "error");
+                                showToast("등록할 데이터가 없습니다. 양식을 확인해주세요.", "error");
                             }
                         } catch (err) {
                             showToast("업로드 중 오류 발생: " + err.message, "error");
+                            console.error(err);
                         } finally {
                             setIsBulkModalOpen(false);
-                            e.target.value = '';
+                            if(fileInputRef.current) fileInputRef.current.value = '';
                         }
                     }
                 });
@@ -830,16 +1023,36 @@
                                     </button>
                                 )}
 
-                                <button onClick={() => { setEditingItem(null); setProductForm({ project: activeProject === '전체' ? settings.projects[0] : activeProject, mainCategory: '', category: '', name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: [''] }); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-md hover:bg-indigo-700 font-black font-bold font-black"><Plus className="w-4 h-4 font-black" />신규 등록</button>
+                                <button onClick={() => { setEditingItem(null); setProductForm({ project: activeProject === '전체' ? (settings.projects[0] || '') : activeProject, mainCategory: '', category: '', name: '', option: '', cost: '', price: '', image: null, optionImage: null, cny: '', links: [''], naverLinks: [''] }); setIsAddModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-md hover:bg-indigo-700 font-black font-bold font-black"><Plus className="w-4 h-4 font-black" />신규 등록</button>
                             </div>
                         </header>
 
-                        <main className="flex-1 overflow-auto p-6 custom-scrollbar font-black">
+                        <main className="flex-1 overflow-auto p-6 custom-scrollbar font-black relative">
+                            {/* 선택된 항목 일괄 처리 바 */}
+                            {selectedItems.length > 0 && (
+                                <div className="bg-indigo-50 border border-indigo-200 p-3 mb-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down font-black">
+                                    <span className="text-indigo-800 font-bold"><span className="text-indigo-600 text-lg mx-1">{selectedItems.length}</span>개 항목 선택됨</span>
+                                    <div className="flex gap-2 font-black">
+                                        <button onClick={() => setIsBulkMoveModalOpen(true)} className="bg-white border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-indigo-100 shadow-sm transition-colors font-black"><FolderTree className="w-4 h-4"/> 카테고리 이동</button>
+                                        <button onClick={handleBulkDelete} className="bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-red-50 shadow-sm transition-colors font-black"><Trash2 className="w-4 h-4"/> 선택 삭제</button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="bg-white rounded-2xl border shadow-sm overflow-x-auto min-w-[1300px] font-black">
                                 <table className="w-full text-left text-sm font-black">
                                     <thead className="bg-gray-50 text-gray-400 border-b font-black uppercase text-[10px] tracking-widest font-black">
                                         <tr>
-                                            <th className="px-4 py-4 w-12 text-center font-black">No</th>
+                                            {/* 체크박스 열 추가 */}
+                                            <th className="px-4 py-4 w-12 text-center font-black">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={filteredProducts.length > 0 && selectedItems.length === filteredProducts.length}
+                                                    onChange={handleSelectAll}
+                                                    className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                                                />
+                                            </th>
+                                            <th className="px-2 py-4 w-12 text-center font-black">No</th>
                                             <th className="px-2 py-4 w-24 text-center font-black">이미지</th>
                                             <th className="px-6 py-4 font-black">상품 정보</th>
                                             <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('createdAt')}>
@@ -863,8 +1076,17 @@
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 font-black">
                                         {filteredProducts.map((item, idx) => (
-                                            <tr key={item.firebaseId} className={`hover:bg-gray-50/50 transition-colors font-black ${item.isConfirmed ? 'bg-green-50/30' : item.isHeld ? 'bg-amber-50/30' : ''}`}>
-                                                <td className="px-4 py-4 text-center text-gray-400 font-mono text-xs font-black">{idx + 1}</td>
+                                            <tr key={item.firebaseId} className={`hover:bg-gray-50/50 transition-colors font-black ${item.isConfirmed ? 'bg-green-50/30' : item.isHeld ? 'bg-amber-50/30' : ''} ${selectedItems.includes(item.firebaseId) ? 'bg-indigo-50/30' : ''}`}>
+                                                {/* 개별 항목 체크박스 */}
+                                                <td className="px-4 py-4 text-center">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedItems.includes(item.firebaseId)}
+                                                        onChange={() => handleSelectItem(item.firebaseId)}
+                                                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                                                    />
+                                                </td>
+                                                <td className="px-2 py-4 text-center text-gray-400 font-mono text-xs font-black">{idx + 1}</td>
                                                 <td className="px-2 py-4 font-black">
                                                     <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border cursor-pointer relative group shadow-inner font-black" onClick={() => item.image && setPreviewImage(item.image)}>
                                                         {item.image ? <img src={item.image} className="w-full h-full object-cover font-black" /> : <ImageIcon className="w-6 h-6 m-auto mt-5 text-gray-200 font-black"/>}
@@ -924,6 +1146,45 @@
                             </div>
                         </main>
                     </div>
+
+                    {/* 일괄 카테고리 이동 모달 */}
+                    {isBulkMoveModalOpen && (
+                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4 font-black">
+                            <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl font-black">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-black text-indigo-900 font-black"><FolderTree className="inline-block w-6 h-6 mr-2" />선택 항목 이동</h3>
+                                    <button onClick={() => setIsBulkMoveModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-black"><X className="w-6 h-6 font-black"/></button>
+                                </div>
+                                <form onSubmit={handleBulkMove} className="space-y-4 text-sm font-bold">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-gray-400 uppercase font-black">이동할 프로젝트</label>
+                                        <select value={bulkMoveTarget.project} onChange={(e) => setBulkMoveTarget({...bulkMoveTarget, project: e.target.value})} className="w-full border rounded-lg p-2.5 bg-gray-50 outline-none font-black" required>
+                                            <option value="">프로젝트 선택</option>
+                                            {settings.projects.map(pj => <option key={pj} value={pj}>{pj}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-gray-400 uppercase font-black">이동할 대분류</label>
+                                        <select value={bulkMoveTarget.mainCategory} onChange={(e) => setBulkMoveTarget({...bulkMoveTarget, mainCategory: e.target.value, category: ''})} className="w-full border rounded-lg p-2.5 bg-gray-50 outline-none font-black" required>
+                                            <option value="">대분류 선택</option>
+                                            {settings.categoryGroups.map(g => <option key={g.main} value={g.main}>{g.main}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-gray-400 uppercase font-black">이동할 소분류</label>
+                                        <select value={bulkMoveTarget.category} onChange={(e) => setBulkMoveTarget({...bulkMoveTarget, category: e.target.value})} className="w-full border rounded-lg p-2.5 bg-gray-50 outline-none font-black" required>
+                                            <option value="">소분류 선택</option>
+                                            {settings.categoryGroups.find(g => g.main === bulkMoveTarget.mainCategory)?.subs.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-4 mt-6">
+                                        <button type="button" onClick={() => setIsBulkMoveModalOpen(false)} className="flex-1 bg-gray-100 py-3 rounded-xl font-black font-black">취소</button>
+                                        <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl shadow-lg hover:bg-indigo-700 font-black font-black transition-transform active:scale-95">이동 완료</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
 
                     {/* 대량 업로드 모달 추가 */}
                     {isBulkModalOpen && (
