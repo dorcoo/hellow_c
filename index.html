@@ -46,20 +46,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
-
-        /* 인쇄 및 PDF 전용 스타일 */
-        @media print {
-            body, html, #root { height: auto !important; overflow: visible !important; background-color: white !important; }
-            .app-main-container { display: none !important; }
-            .pdf-export-container { display: block !important; padding: 10px; font-family: 'Malgun Gothic', sans-serif; color: black; }
-            .pdf-export-container table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .pdf-export-container th, .pdf-export-container td { border: 1px solid #cbd5e1; padding: 10px; font-size: 11px; text-align: left; }
-            .pdf-export-container th { background-color: #f1f5f9 !important; font-weight: bold; text-align: center; }
-            .pdf-export-container img { max-width: 60px; max-height: 60px; object-fit: contain; }
-            .pdf-export-container a { color: #2563eb !important; text-decoration: underline !important; }
-            @page { size: A4 landscape; margin: 15mm; }
-        }
-        .pdf-export-container { display: none; }
     </style>
 
     <script type="module">
@@ -78,7 +64,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useRef } = React;
 
-        const DEFAULT_MASTER_PW = "1234";
+        const DEFAULT_MASTER_PW = "3522";
         const DEFAULT_MEMBER_PW = "5678";
 
         const IconBase = ({ children, className, ...props }) => (
@@ -112,6 +98,8 @@
             Flag: (props) => <IconBase {...props}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></IconBase>,
             ChevronUp: (props) => <IconBase {...props}><polyline points="18 15 12 9 6 15"/></IconBase>,
             ChevronDown: (props) => <IconBase {...props}><polyline points="6 9 12 15 18 9"/></IconBase>,
+            ChevronsUp: (props) => <IconBase {...props}><path d="m17 11-5-5-5 5"/><path d="m17 18-5-5-5 5"/></IconBase>,
+            ChevronsDown: (props) => <IconBase {...props}><path d="m7 6 5 5 5-5"/><path d="m7 13 5 5 5-5"/></IconBase>,
             Lock: (props) => <IconBase {...props}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>,
             Shield: (props) => <IconBase {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></IconBase>,
             User: (props) => <IconBase {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>,
@@ -123,13 +111,12 @@
             Eye: (props) => <IconBase {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></IconBase>,
             Calendar: (props) => <IconBase {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>,
             ChevronsUpDown: (props) => <IconBase {...props}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></IconBase>,
-            ArrowUpDown: (props) => <IconBase {...props}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>,
-            FilePdf: (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/><path d="M9 15h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9v2"/><path d="M13 15v4a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-1a1 1 0 0 0-1 1z"/><path d="M17 15h3v4h-3"/></IconBase>
+            ArrowUpDown: (props) => <IconBase {...props}><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></IconBase>
         };
 
         const { 
             Package, Search, Check, X, Minus, Calculator, ImageIcon, Trash2, Plus, Settings, Edit2, 
-            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Upload, Clock, Flag, ChevronUp, ChevronDown, Lock, Shield, User, Key, FileText, RotateCcw, Layers, FolderTree, Eye, Calendar, ChevronsUpDown, ArrowUpDown, FilePdf
+            StickyNote, ChevronRight, LayoutDashboard, CheckCircle, ZoomIn, Cloud, RefreshCw, Truck, Menu, Download, Upload, Clock, Flag, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Lock, Shield, User, Key, FileText, RotateCcw, Layers, FolderTree, Eye, Calendar, ChevronsUpDown, ArrowUpDown
         } = Icons;
 
         class ErrorBoundary extends React.Component {
@@ -306,19 +293,34 @@
             const [ratios, setRatios] = useState({ ...currentRatios });
 
             const moveGroup = (index, direction) => {
+                if ((direction === 'up' || direction === 'top') && index === 0) return;
+                if ((direction === 'down' || direction === 'bottom') && index === groups.length - 1) return;
+                
                 const newGroups = [...groups];
-                const newIndex = direction === 'up' ? index - 1 : index + 1;
-                if (newIndex < 0 || newIndex >= newGroups.length) return;
-                [newGroups[index], newGroups[newIndex]] = [newGroups[newIndex], newGroups[index]];
+                const item = newGroups.splice(index, 1)[0];
+                
+                if (direction === 'up') newGroups.splice(index - 1, 0, item);
+                else if (direction === 'down') newGroups.splice(index + 1, 0, item);
+                else if (direction === 'top') newGroups.unshift(item);
+                else if (direction === 'bottom') newGroups.push(item);
+                
                 setGroups(newGroups);
             };
 
             const moveSubCat = (groupIndex, subIndex, direction) => {
                 const newGroups = [...groups];
                 const subs = newGroups[groupIndex].subs;
-                const newIndex = direction === 'up' ? subIndex - 1 : subIndex + 1;
-                if (newIndex < 0 || newIndex >= subs.length) return;
-                [subs[subIndex], subs[newIndex]] = [subs[newIndex], subs[subIndex]];
+
+                if ((direction === 'up' || direction === 'top') && subIndex === 0) return;
+                if ((direction === 'down' || direction === 'bottom') && subIndex === subs.length - 1) return;
+
+                const item = subs.splice(subIndex, 1)[0];
+                
+                if (direction === 'up') subs.splice(subIndex - 1, 0, item);
+                else if (direction === 'down') subs.splice(subIndex + 1, 0, item);
+                else if (direction === 'top') subs.unshift(item);
+                else if (direction === 'bottom') subs.push(item);
+                
                 setGroups(newGroups);
             };
 
@@ -350,22 +352,26 @@
                             {groups.map((g, gIdx) => (
                                 <div key={gIdx} className="bg-gray-50 p-4 rounded-xl border">
                                     <div className="flex items-center gap-3 mb-4 font-black">
-                                        <div className="flex flex-col gap-0.5 opacity-40 hover:opacity-100 font-bold transition-opacity">
-                                            <button onClick={() => moveGroup(gIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-4 h-4"/></button>
-                                            <button onClick={() => moveGroup(gIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-4 h-4"/></button>
+                                        <div className="flex items-center gap-1 opacity-40 hover:opacity-100 font-bold transition-opacity bg-gray-200/50 p-1 rounded-md">
+                                            <button onClick={() => moveGroup(gIdx, 'top')} className="hover:text-indigo-600 p-0.5" title="최상단으로"><ChevronsUp className="w-4 h-4"/></button>
+                                            <button onClick={() => moveGroup(gIdx, 'up')} className="hover:text-indigo-500 p-0.5" title="위로"><ChevronUp className="w-4 h-4"/></button>
+                                            <button onClick={() => moveGroup(gIdx, 'down')} className="hover:text-indigo-500 p-0.5" title="아래로"><ChevronDown className="w-4 h-4"/></button>
+                                            <button onClick={() => moveGroup(gIdx, 'bottom')} className="hover:text-indigo-600 p-0.5" title="최하단으로"><ChevronsDown className="w-4 h-4"/></button>
                                         </div>
-                                        <Layers className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                                        <Layers className="w-5 h-5 text-indigo-600 flex-shrink-0 ml-1" />
                                         <input value={g.main} onChange={(e) => { const n = [...groups]; n[gIdx].main = e.target.value; setGroups(n); }} className="bg-transparent font-black text-indigo-900 text-lg outline-none flex-1 border-b border-transparent focus:border-indigo-200" placeholder="대분류명" />
                                         <button onClick={() => setGroups(groups.filter((_, i) => i !== gIdx))} className="text-red-300 ml-auto font-black bg-white hover:text-red-500 p-1.5 rounded transition-colors"><Trash2 className="w-5 h-5"/></button>
                                     </div>
                                     <div className="space-y-2 pl-8">
                                         {g.subs.map((sub, sIdx) => (
                                             <div key={sIdx} className="flex items-center gap-4 bg-white p-2 rounded border text-xs font-black group shadow-sm hover:border-indigo-200 transition-colors">
-                                                <div className="flex flex-col gap-0.5 opacity-30 group-hover:opacity-100 font-bold transition-opacity">
-                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'up')} className="hover:text-indigo-500"><ChevronUp className="w-3 h-3"/></button>
-                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'down')} className="hover:text-indigo-500"><ChevronDown className="w-3 h-3"/></button>
+                                                <div className="flex items-center gap-1 opacity-30 group-hover:opacity-100 font-bold transition-opacity bg-gray-100 p-1 rounded-md">
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'top')} className="hover:text-indigo-600 p-0.5" title="최상단으로"><ChevronsUp className="w-3 h-3"/></button>
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'up')} className="hover:text-indigo-500 p-0.5" title="위로"><ChevronUp className="w-3 h-3"/></button>
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'down')} className="hover:text-indigo-500 p-0.5" title="아래로"><ChevronDown className="w-3 h-3"/></button>
+                                                    <button onClick={() => moveSubCat(gIdx, sIdx, 'bottom')} className="hover:text-indigo-600 p-0.5" title="최하단으로"><ChevronsDown className="w-3 h-3"/></button>
                                                 </div>
-                                                <input value={sub} onChange={(e) => updateSubName(gIdx, sIdx, sub, e.target.value)} className="w-32 border border-gray-200 focus:border-indigo-400 rounded p-1.5 font-black outline-none" placeholder="소분류명" />
+                                                <input value={sub} onChange={(e) => updateSubName(gIdx, sIdx, sub, e.target.value)} className="w-32 border border-gray-200 focus:border-indigo-400 rounded p-1.5 font-black outline-none ml-1" placeholder="소분류명" />
                                                 <div className="flex items-center gap-1 font-black">
                                                     <span className="text-gray-500 text-[10px]">배율:</span>
                                                     <input type="number" step="0.01" value={ratios[sub] || 1} onChange={(e) => setRatios({...ratios, [sub]: Number(e.target.value)})} className="w-16 border border-gray-200 rounded px-1.5 py-1 font-black outline-none focus:border-amber-400 text-amber-700"/>
@@ -617,7 +623,7 @@
 
             const startEditingNo = (item, currentNo) => {
                 if (sortConfig.key !== 'customOrder' || sortConfig.direction !== 'asc') {
-                    showToast("오른쪽 위의 정렬 기준을 '내 임 임의 정렬 (수동)'으로 설정해야 순서를 바꿀 수 있습니다.", "error");
+                    showToast("오른쪽 위의 정렬 기준을 '내 임의 정렬 (수동)'으로 설정해야 순서를 바꿀 수 있습니다.", "error");
                     return;
                 }
                 setEditingNoId(item.firebaseId);
@@ -1034,59 +1040,8 @@
                 setActiveCategory("전체");
             };
 
-            const handleDownloadPDF = () => {
-                window.print();
-            };
-
             return (
                 <React.Fragment>
-                    {/* PDF 출력용 전용 컨테이너 (평소에는 hidden) */}
-                    <div className="pdf-export-container">
-                        <h1 className="text-2xl font-black mb-6 text-center">최종 확정 상품 리스트</h1>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>No</th>
-                                    <th>이미지</th>
-                                    <th>상품 정보</th>
-                                    <th>위안가</th>
-                                    <th>도착가</th>
-                                    <th>판매가</th>
-                                    <th>소싱/경쟁사 링크</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {products.filter(p => p.isConfirmed && !p.isDeleted).map((item, idx) => (
-                                    <tr key={item.firebaseId}>
-                                        <td align="center">{idx + 1}</td>
-                                        <td align="center">
-                                            {item.image ? <img src={item.image} /> : 'N/A'}
-                                        </td>
-                                        <td>
-                                            <div className="font-black text-indigo-600 mb-1">[{item.project}] {item.mainCategory} &gt; {item.category}</div>
-                                            <div className="text-sm font-black mb-1">#{item.itemCode || item.firebaseId.slice(-6).toUpperCase()}</div>
-                                            <div className="text-base font-black">{item.name}</div>
-                                            <div className="text-gray-500">{item.option || '옵션없음'}</div>
-                                        </td>
-                                        <td align="right" className="font-mono">{item.cny || 0} ¥</td>
-                                        <td align="right" className="font-mono">{item.cost?.toLocaleString()}원</td>
-                                        <td align="right" className="font-mono font-black">{item.price?.toLocaleString()}원</td>
-                                        <td>
-                                            <div className="mb-2">
-                                                <div className="text-[9px] font-black text-orange-600 mb-1 uppercase">소싱처</div>
-                                                {(item.links || []).filter(l => l).map((l, i) => <div key={i} className="mb-1"><a href={l} target="_blank">링크 #{i+1}</a></div>)}
-                                            </div>
-                                            <div>
-                                                <div className="text-[9px] font-black text-green-600 mb-1 uppercase">경쟁사</div>
-                                                {(item.naverLinks || []).filter(l => l).map((l, i) => <div key={i} className="mb-1"><a href={l} target="_blank">링크 #{i+1}</a></div>)}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
                     <div className="app-main-container flex h-screen bg-gray-50 overflow-hidden text-sm font-bold font-black">
                         <div className={`sidebar-transition bg-white border-r flex flex-col shadow-sm z-20 overflow-hidden ${isSidebarOpen ? 'w-72' : 'w-0'}`}>
                             <div className="p-6 border-b bg-indigo-600 text-white flex-shrink-0 font-black">
@@ -1222,11 +1177,6 @@
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 font-black" />
                                         <input type="text" placeholder="통합 검색 (코드/상품명)..." className="pl-9 pr-4 py-2 bg-gray-100 rounded-lg text-sm w-64 outline-none font-black font-black font-black" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                     </div>
-                                    
-                                    {/* PDF 출력 버튼 추가 */}
-                                    <button onClick={handleDownloadPDF} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-md hover:bg-red-700 font-black font-bold transition-all">
-                                        <FilePdf className="w-4 h-4 font-black" /> 확정건 PDF
-                                    </button>
 
                                     {userRole === 'admin' && (
                                         <button onClick={() => setIsBulkModalOpen(true)} className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-md hover:bg-gray-900 font-black font-bold font-black">
@@ -1422,7 +1372,11 @@
                                                                 <>
                                                                     {item.isConfirmed && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg font-black bg-green-100 text-green-700 border border-green-200"><CheckCircle className="w-3.5 h-3.5"/> 확정</span>}
                                                                     {item.isHeld && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg font-black bg-amber-100 text-amber-700 border border-amber-200"><Clock className="w-3.5 h-3.5"/> 보류</span>}
-                                                                    {item.isSampleRequested && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg font-black bg-blue-100 text-blue-700 border border-blue-200"><Truck className="w-3.5 h-3.5"/> 샘플</span>}
+                                                                    {isConfirmedOnlyView ? (
+                                                                        <button onClick={() => toggleSample(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all font-black ${item.isSampleRequested ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="샘플신청"><Truck className="w-3.5 h-3.5"/> 샘플</button>
+                                                                    ) : (
+                                                                        item.isSampleRequested && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg font-black bg-blue-100 text-blue-700 border border-blue-200"><Truck className="w-3.5 h-3.5"/> 샘플</span>
+                                                                    )}
                                                                     {!item.isConfirmed && !item.isHeld && !item.isSampleRequested && <span className="text-xs text-gray-400 font-black">진행중</span>}
                                                                 </>
                                                             )}
