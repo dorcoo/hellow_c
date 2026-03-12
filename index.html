@@ -125,11 +125,11 @@
         class ErrorBoundary extends React.Component {
             constructor(props) {
                 super(props);
-                this.state = { hasError: false };
+                this.state = { hasError: false, errorInfo: null };
             }
-            static getDerivedStateFromError(error) { return { hasError: true }; }
+            static getDerivedStateFromError(error) { return { hasError: true, errorInfo: error.toString() }; }
             render() {
-                if (this.state.hasError) return <div className="p-10 text-center">오류가 발생했습니다. 새로고침 해주세요.</div>;
+                if (this.state.hasError) return <div className="p-10 text-center text-red-500 font-bold">오류가 발생했습니다: {this.state.errorInfo}<br/>새로고침 해주세요.</div>;
                 return this.props.children;
             }
         }
@@ -247,8 +247,8 @@
         };
 
         const SystemSettingsModal = ({ currentProjects, currentTeam, currentSecurity, onClose, onSave }) => {
-            const [projs, setProjs] = useState([...currentProjects]);
-            const [team, setTeam] = useState([...currentTeam]);
+            const [projs, setProjs] = useState([...(currentProjects || [])]);
+            const [team, setTeam] = useState([...(currentTeam || [])]);
             const [masterPw, setMasterPw] = useState(currentSecurity?.master || DEFAULT_MASTER_PW);
             const [memberPwMap, setMemberPwMap] = useState(currentSecurity?.memberPasswords || {});
 
@@ -267,7 +267,8 @@
                                 <input type="text" value={masterPw} onChange={(e) => setMasterPw(e.target.value)} className="w-full border border-red-200 rounded-lg p-2 text-sm font-black"/>
                             </section>
                             <section className="font-black">
-                                <label className="text-xs font-black text-gray-400 uppercase mb-4 block border-b pb-1">팀원 관리 (팀별 개별암호)</label>
+                                <label className="text-xs font-black text-gray-400 uppercase mb-2 block border-b pb-1">팀원 관리 (팀별 개별암호)</label>
+                                <p className="text-[10px] text-red-500 mt-1 mb-4">※ 로그인 오류 방지를 위해 팀원별 암호는 반드시 다르게 설정하세요.</p>
                                 <div className="space-y-2">
                                     {team.map((m, i) => (
                                         <div key={i} className="flex gap-2 items-center">
@@ -306,9 +307,9 @@
         };
 
         const CategorySettingsModal = ({ currentGroups, currentFees, currentRatios, onClose, onSave }) => {
-            const [groups, setGroups] = useState(JSON.parse(JSON.stringify(currentGroups)));
-            const [fees, setFees] = useState({ ...currentFees });
-            const [ratios, setRatios] = useState({ ...currentRatios });
+            const [groups, setGroups] = useState(JSON.parse(JSON.stringify(currentGroups || [])));
+            const [fees, setFees] = useState({ ...(currentFees || {}) });
+            const [ratios, setRatios] = useState({ ...(currentRatios || {}) });
 
             const moveGroup = (index, direction) => {
                 if ((direction === 'up' || direction === 'top') && index === 0) return;
@@ -536,6 +537,21 @@
                 return { auth: getAuth(app), db: getFirestore(app), storage: getStorage(app), appId: typeof __app_id !== 'undefined' ? __app_id : 'sourcing-app-v2' };
             }, []);
 
+            // 강제 로그아웃 로직 (세션 키 불일치 및 권한 오류 방지용 안전장치)
+            useEffect(() => {
+                if (userRole === 'member' && userKey && userKey !== 'guest') {
+                    if (settings.teamMembers && settings.teamMembers.length > 0) {
+                        const stillExists = settings.teamMembers.find(m => m.key === userKey);
+                        if (!stillExists) {
+                            alert("계정 정보가 갱신되어 자동으로 로그아웃됩니다. 다시 로그인해주세요.");
+                            sessionStorage.removeItem('team_role');
+                            sessionStorage.removeItem('team_user_key');
+                            window.location.reload();
+                        }
+                    }
+                }
+            }, [settings.teamMembers, userKey, userRole]);
+
             useEffect(() => {
                 setSelectedItems([]);
             }, [activeProject, activeMainCategory, activeCategory, filterStatus]);
@@ -673,11 +689,21 @@
             }, [allComments]);
 
             const currentUserSettings = useMemo(() => (settings.teamMembers || []).find(m => m.key === userKey), [settings.teamMembers, userKey]);
-            const isConfirmedOnlyView = userRole === 'member' && currentUserSettings?.isConfirmedOnly;
+            // 확정만 보기 권한을 boolean 값으로 완벽하게 체크
+            const isConfirmedOnlyView = useMemo(() => {
+                if (userRole !== 'member') return false;
+                return currentUserSettings?.isConfirmedOnly === true || String(currentUserSettings?.isConfirmedOnly) === 'true';
+            }, [userRole, currentUserSettings]);
 
             const displayProducts = useMemo(() => {
                 return products
-                    .filter(p => isConfirmedOnlyView ? p.isConfirmed : true)
+                    .filter(p => {
+                        if (isConfirmedOnlyView) {
+                            // "확정만 보기" 팀원의 경우: 아무 상태도 없는 진행중이나 보류건은 모두 완전 차단
+                            return p.isConfirmed || p.isFinalized || p.isSampleRequested;
+                        }
+                        return true;
+                    })
                     .map(p => ({ 
                         ...p, 
                         mappedMainCategory: p.mainCategory || "미분류",
@@ -696,16 +722,18 @@
                     const term = searchTerm.toLowerCase();
                     list = list.filter(p => p.name?.toLowerCase().includes(term) || p.option?.toLowerCase().includes(term) || (p.itemCode && p.itemCode.toLowerCase().includes(term)));
                 }
-                if (filterStatus === 'confirmed') list = list.filter(p => p.isConfirmed);
-                else if (filterStatus === 'held') list = list.filter(p => p.isHeld && !p.isConfirmed);
+                
+                if (filterStatus === 'finalized') list = list.filter(p => p.isFinalized);
+                else if (filterStatus === 'confirmed') list = list.filter(p => p.isConfirmed);
                 else if (filterStatus === 'sample') list = list.filter(p => p.isSampleRequested);
-                else if (filterStatus === 'unconfirmed') list = list.filter(p => !p.isConfirmed && !p.isHeld);
+                else if (filterStatus === 'unconfirmed') list = list.filter(p => !p.isConfirmed && !p.isHeld && !p.isFinalized && !p.isSampleRequested);
+                else if (filterStatus === 'held') list = list.filter(p => p.isHeld && !p.isConfirmed && !p.isFinalized);
                 
                 return list.sort((a, b) => {
                     let aValue, bValue;
                     if (sortConfig.key === 'customOrder') {
-                        const priorityA = a.isConfirmed ? 1 : (a.isHeld ? 3 : 2);
-                        const priorityB = b.isConfirmed ? 1 : (b.isHeld ? 3 : 2);
+                        const priorityA = a.isFinalized ? 1 : (a.isConfirmed ? 2 : (a.isSampleRequested ? 3 : (a.isHeld ? 5 : 4)));
+                        const priorityB = b.isFinalized ? 1 : (b.isConfirmed ? 2 : (b.isSampleRequested ? 3 : (b.isHeld ? 5 : 4)));
                         if (priorityA !== priorityB) return priorityA - priorityB;
                         aValue = a.customOrder !== undefined ? a.customOrder : -(a.createdAt || 0);
                         bValue = b.customOrder !== undefined ? b.customOrder : -(b.createdAt || 0);
@@ -796,22 +824,42 @@
             };
 
             const toggleStatus = async (item, memberKey) => {
-                const current = item.approvals?.[memberKey] || 'pending';
-                const next = current === 'approved' ? 'rejected' : (current === 'rejected' ? 'pending' : 'approved');
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { approvals: { ...item.approvals, [memberKey]: next }, updatedAt: Date.now() });
+                try {
+                    const current = item.approvals?.[memberKey] || 'pending';
+                    const next = current === 'approved' ? 'rejected' : (current === 'rejected' ? 'pending' : 'approved');
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { 
+                        approvals: { ...(item.approvals || {}), [memberKey]: next }, 
+                        updatedAt: Date.now() 
+                    });
+                } catch(e) { 
+                    console.error("toggleStatus error:", e); 
+                    showToast("상태 변경 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", "error");
+                }
             };
 
             const toggleConfirm = async (item) => {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isConfirmed: !item.isConfirmed, isHeld: false, updatedAt: Date.now() });
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isConfirmed: !item.isConfirmed, isHeld: false, isFinalized: false, updatedAt: Date.now() });
+                } catch(e) { showToast("오류 발생", "error"); }
+            };
+
+            const toggleFinalize = async (item) => {
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isFinalized: !item.isFinalized, isConfirmed: false, isHeld: false, updatedAt: Date.now() });
+                } catch(e) { showToast("오류 발생", "error"); }
             };
 
             const toggleHold = async (item) => {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isHeld: !item.isHeld, isConfirmed: false, updatedAt: Date.now() });
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isHeld: !item.isHeld, isConfirmed: false, isFinalized: false, updatedAt: Date.now() });
+                } catch(e) { showToast("오류 발생", "error"); }
             };
 
             const toggleSample = async (item) => {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isSampleRequested: !item.isSampleRequested, updatedAt: Date.now() });
-                showToast(item.isSampleRequested ? "샘플 신청이 취소되었습니다." : "샘플이 신청되었습니다.");
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isSampleRequested: !item.isSampleRequested, updatedAt: Date.now() });
+                    showToast(item.isSampleRequested ? "샘플 신청이 취소되었습니다." : "샘플이 신청되었습니다.");
+                } catch(e) { showToast("오류 발생", "error"); }
             };
 
             const handleAddOrUpdateProduct = async (e) => {
@@ -824,14 +872,16 @@
                     links: productForm.links.filter(l => l.trim()),
                     naverLinks: productForm.naverLinks.filter(l => l.trim())
                 };
-                if (editingItem) {
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload);
-                } else {
-                    const newItemCode = generateItemCode();
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, itemCode: newItemCode, createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleRequested: false, isDeleted: false, approvals: {} });
-                }
-                setIsAddModalOpen(false);
-                showToast("저장되었습니다.");
+                try {
+                    if (editingItem) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', editingItem.firebaseId), payload);
+                    } else {
+                        const newItemCode = generateItemCode();
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), { ...payload, itemCode: newItemCode, createdAt: Date.now(), isConfirmed: false, isFinalized: false, isHeld: false, isSampleRequested: false, isDeleted: false, approvals: {} });
+                    }
+                    setIsAddModalOpen(false);
+                    showToast("저장되었습니다.");
+                } catch(e) { showToast("저장 오류", "error"); }
             };
 
             const handleSelectAll = (e) => {
@@ -968,7 +1018,7 @@
                                     updateCount++;
                                 } else {
                                     const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'products'));
-                                    currentBatch.set(docRef, { ...payload, itemCode: existingCode || generateItemCode(), createdAt: Date.now(), isConfirmed: false, isHeld: false, isSampleRequested: false, isDeleted: false, approvals: defaultApprovals });
+                                    currentBatch.set(docRef, { ...payload, itemCode: existingCode || generateItemCode(), createdAt: Date.now(), isConfirmed: false, isFinalized: false, isHeld: false, isSampleRequested: false, isDeleted: false, approvals: defaultApprovals });
                                     addCount++;
                                 }
                                 operationCount++;
@@ -986,8 +1036,8 @@
 
             const handleCnyChange = (val) => { 
                 const cat = productForm.category;
-                const categoryFee = settings.categoryFees[cat] || 0; 
-                const categoryRatio = settings.categoryRatios[cat] || 1.0; 
+                const categoryFee = settings.categoryFees?.[cat] || 0; 
+                const categoryRatio = settings.categoryRatios?.[cat] || 1.0; 
                 const cost = val ? Math.round(val * settings.exchangeRate * categoryRatio) + categoryFee : ''; 
                 setProductForm(prev => ({ ...prev, cny: val, cost: cost })); 
             };
@@ -1028,9 +1078,10 @@
                     if (p.isDeleted) return;
                     if (activeProject !== "전체" && p.project !== activeProject) return;
                     if (filterStatus === 'confirmed' && !p.isConfirmed) return;
-                    if (filterStatus === 'held' && (!p.isHeld || p.isConfirmed)) return;
+                    if (filterStatus === 'finalized' && !p.isFinalized) return;
+                    if (filterStatus === 'held' && (!p.isHeld || p.isConfirmed || p.isFinalized)) return;
                     if (filterStatus === 'sample' && !p.isSampleRequested) return;
-                    if (filterStatus === 'unconfirmed' && (p.isConfirmed || p.isHeld)) return;
+                    if (filterStatus === 'unconfirmed' && (p.isConfirmed || p.isHeld || p.isFinalized || p.isSampleRequested)) return;
                     const mainCat = p.mappedMainCategory;
                     const subCat = p.mappedSubCategory;
                     counts.main[mainCat] = (counts.main[mainCat] || 0) + 1;
@@ -1055,28 +1106,36 @@
                                     {(settings.projects || []).map(pj => <option key={pj} value={pj}>{pj}</option>)}
                                 </select>
                             </div>
+                            
+                            {/* 필터 순서 완벽 정렬: 전체 -> 최종확정 -> 선택건 -> 샘플신청 -> 진행중 -> 보류건 */}
                             <div className="px-3 space-y-1">
                                 <label className="text-[10px] font-black text-gray-400 uppercase mb-2 block">필터</label>
                                 <button onClick={() => {setFilterStatus('all'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'all' ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'}`}>
                                     전체<span>{displayProducts.filter(p => !p.isDeleted && (activeProject === "전체" || p.project === activeProject)).length}</span>
                                 </button>
+                                <button onClick={() => {setFilterStatus('finalized'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'finalized' ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-gray-100'}`}>
+                                    최종확정<span>{displayProducts.filter(p => !p.isDeleted && p.isFinalized && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                </button>
+                                <button onClick={() => {setFilterStatus('confirmed'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 'hover:bg-gray-100'}`}>
+                                    선택건<span>{displayProducts.filter(p => !p.isDeleted && p.isConfirmed && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                </button>
+                                <button onClick={() => {setFilterStatus('sample'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'sample' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}>
+                                    샘플신청<span>{displayProducts.filter(p => !p.isDeleted && p.isSampleRequested && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                </button>
+                                
+                                {/* 확정만 보기 권한일 경우 아래 두 메뉴는 렌더링되지 않음 */}
                                 {!isConfirmedOnlyView && (
                                     <>
                                         <button onClick={() => {setFilterStatus('unconfirmed'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'unconfirmed' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}>
-                                            진행중<span>{displayProducts.filter(p => !p.isDeleted && !p.isConfirmed && !p.isHeld && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                            진행중<span>{displayProducts.filter(p => !p.isDeleted && !p.isConfirmed && !p.isHeld && !p.isFinalized && !p.isSampleRequested && (activeProject === "전체" || p.project === activeProject)).length}</span>
                                         </button>
                                         <button onClick={() => {setFilterStatus('held'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'held' ? 'bg-amber-100 text-amber-700' : 'hover:bg-gray-100'}`}>
-                                            보류건<span>{displayProducts.filter(p => !p.isDeleted && p.isHeld && (activeProject === "전체" || p.project === activeProject)).length}</span>
-                                        </button>
-                                        <button onClick={() => {setFilterStatus('sample'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'sample' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}>
-                                            샘플신청<span>{displayProducts.filter(p => !p.isDeleted && p.isSampleRequested && (activeProject === "전체" || p.project === activeProject)).length}</span>
+                                            보류건<span>{displayProducts.filter(p => !p.isDeleted && p.isHeld && !p.isConfirmed && !p.isFinalized && (activeProject === "전체" || p.project === activeProject)).length}</span>
                                         </button>
                                     </>
                                 )}
-                                <button onClick={() => {setFilterStatus('confirmed'); setActiveMainCategory('전체'); setActiveCategory('전체');}} className={`w-full text-left px-3 py-2 rounded-lg flex justify-between items-center ${filterStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 'hover:bg-gray-100'}`}>
-                                    최종확정<span>{displayProducts.filter(p => !p.isDeleted && p.isConfirmed && (activeProject === "전체" || p.project === activeProject)).length}</span>
-                                </button>
                             </div>
+
                             <div className="px-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase mb-2 block">카테고리</label>
                                 {sidebarGroups.map(group => {
@@ -1121,13 +1180,18 @@
                                 )}
                             </div>
                         </div>
-                        <div className="p-4 border-t bg-gray-50 flex gap-2">
-                            {userRole === 'admin' ? (
-                                <>
-                                    <button onClick={() => setIsCategorySettingsOpen(true)} className="flex-1 bg-white border py-2 rounded-lg text-indigo-600 shadow-sm text-[11px]">분류설정</button>
-                                    <button onClick={() => setIsSystemSettingsOpen(true)} className="flex-1 bg-white border py-2 rounded-lg text-gray-500 shadow-sm text-[11px]">시스템</button>
-                                </>
-                            ) : <span className="text-gray-400">팀원 모드</span>}
+                        <div className="p-4 border-t bg-gray-50 flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                {userRole === 'admin' ? (
+                                    <>
+                                        <button onClick={() => setIsCategorySettingsOpen(true)} className="flex-1 bg-white border py-2 rounded-lg text-indigo-600 shadow-sm text-[11px] hover:bg-gray-50">분류설정</button>
+                                        <button onClick={() => setIsSystemSettingsOpen(true)} className="flex-1 bg-white border py-2 rounded-lg text-gray-500 shadow-sm text-[11px] hover:bg-gray-50">시스템</button>
+                                    </>
+                                ) : <span className="text-gray-400 flex-1 text-center py-2 text-xs">팀원 모드</span>}
+                            </div>
+                            <button onClick={() => { sessionStorage.clear(); window.location.reload(); }} className="w-full bg-white border border-gray-200 py-2 rounded-lg text-gray-500 shadow-sm text-[11px] hover:bg-gray-100 flex justify-center items-center gap-1 transition-colors">
+                                <User className="w-3 h-3"/> 로그아웃
+                            </button>
                         </div>
                     </div>
 
@@ -1169,9 +1233,9 @@
                             </div>
                         </header>
 
-                        <main className="flex-1 overflow-auto p-6 custom-scrollbar relative">
+                        <main className="flex-1 overflow-auto p-6 relative bg-gray-50 flex flex-col">
                             {userRole === 'admin' && selectedItems.length > 0 && (
-                                <div className="bg-indigo-50 border border-indigo-200 p-3 mb-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down">
+                                <div className="bg-indigo-50 border border-indigo-200 p-3 mb-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in-down flex-shrink-0">
                                     <span className="text-indigo-800 font-bold"><span className="text-indigo-600 text-lg mx-1">{selectedItems.length}</span>개 항목 선택됨</span>
                                     <div className="flex gap-2">
                                         <button onClick={() => setIsBulkMoveModalOpen(true)} className="bg-white border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-indigo-100 shadow-sm"><FolderTree className="w-4 h-4"/> 카테고리 이동</button>
@@ -1180,170 +1244,184 @@
                                 </div>
                             )}
 
-                            <div className="bg-white rounded-2xl border shadow-sm overflow-x-auto min-w-[1600px]">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-gray-50 text-gray-400 border-b uppercase text-[10px] tracking-widest">
-                                        <tr>
-                                            {userRole === 'admin' && (
-                                                <th className="px-4 py-4 w-12 text-center">
-                                                    <input type="checkbox" checked={filteredProducts.length > 0 && selectedItems.length === filteredProducts.length} onChange={handleSelectAll} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
-                                                </th>
-                                            )}
-                                            <th className="px-2 py-4 w-16 text-center">No</th>
-                                            <th className="px-2 py-4 w-16 text-center">순서</th>
-                                            <th className="px-2 py-4 w-48 text-center">이미지</th>
-                                            <th className="px-6 py-4">상품 정보</th>
-                                            <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('createdAt')}>
-                                                <div className="flex items-center justify-center gap-1">등록일시 {sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('updatedAt')}>
-                                                <div className="flex items-center justify-center gap-1">수정일시 {sortConfig.key === 'updatedAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('cny')}>
-                                                <div className="flex items-center justify-end gap-1">위안가 {sortConfig.key === 'cny' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('cost')}>
-                                                <div className="flex items-center justify-end gap-1">도착가 {sortConfig.key === 'cost' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('price')}>
-                                                <div className="flex items-center justify-end gap-1">판매가 {sortConfig.key === 'price' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('margin')}>
-                                                <div className="flex items-center justify-end gap-1">마진(수익) {sortConfig.key === 'margin' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
-                                            </th>
-                                            {(settings.teamMembers || []).map(m => <th key={m.key} className="px-3 py-4 text-center w-16">{m.label}</th>)}
-                                            <th className="px-4 py-4 w-72 text-center bg-gray-100">의견 (댓글)</th>
-                                            <th className="px-6 py-4 text-center w-64">{userRole === 'admin' ? '관리' : '상태'}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {filteredProducts.map((item, idx) => (
-                                            <tr key={item.firebaseId} className={`hover:bg-gray-50/50 transition-colors ${item.isConfirmed ? 'bg-green-50/30' : item.isHeld ? 'bg-amber-50/30' : ''} ${selectedItems.includes(item.firebaseId) ? 'bg-indigo-50/30' : ''}`}>
+                            {/* 가로 스크롤을 표 내부에만 적용하여 레이아웃 무너짐 방지 */}
+                            <div className="bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden">
+                                <div className="overflow-x-auto custom-scrollbar">
+                                    <table className="w-full text-left text-sm min-w-[2400px]">
+                                        <thead className="bg-gray-50 text-gray-400 border-b uppercase text-[10px] tracking-widest sticky top-0 z-10">
+                                            <tr>
                                                 {userRole === 'admin' && (
-                                                    <td className="px-4 py-4 text-center">
-                                                        <input type="checkbox" checked={selectedItems.includes(item.firebaseId)} onChange={() => handleSelectItem(item.firebaseId)} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
-                                                    </td>
+                                                    <th className="px-4 py-4 w-12 text-center">
+                                                        <input type="checkbox" checked={filteredProducts.length > 0 && selectedItems.length === filteredProducts.length} onChange={handleSelectAll} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
+                                                    </th>
                                                 )}
-                                                <td className="px-2 py-4 text-center font-black">
-                                                    {editingNoId === item.firebaseId ? (
-                                                        <input type="number" value={editingNoValue} onChange={(e) => setEditingNoValue(e.target.value)} onBlur={() => submitNewNo(item, idx)} onKeyDown={(e) => { if (e.key === 'Enter') submitNewNo(item, idx); else if (e.key === 'Escape') setEditingNoId(null); }} className="w-12 text-center border-2 border-indigo-400 rounded outline-none text-indigo-700 py-1" autoFocus />
-                                                    ) : (
-                                                        <div onClick={() => { if (userRole === 'admin') startEditingNo(item, idx + 1); else showToast("팀원은 순서를 변경할 수 없습니다.", "error"); }} className={`inline-block px-2 py-1.5 rounded font-mono text-sm transition-all ${userRole === 'admin' && sortConfig.key === 'customOrder' ? 'cursor-pointer text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:scale-110 border border-indigo-100 shadow-sm' : 'text-gray-400'}`} title="숫자를 클릭하여 원하는 순서로 즉시 이동">
-                                                            {idx + 1}
-                                                        </div>
+                                                <th className="px-2 py-4 w-16 text-center">No</th>
+                                                <th className="px-2 py-4 w-16 text-center">순서</th>
+
+                                                {/* 관리/상태, 댓글 영역을 전면(이미지 앞)으로 유지 */}
+                                                <th className="px-6 py-4 text-center w-80">{userRole === 'admin' ? '관리' : '상태'}</th>
+                                                <th className="px-4 py-4 w-72 text-center bg-gray-100">의견 (댓글)</th>
+                                                
+                                                <th className="px-2 py-4 w-48 text-center">이미지</th>
+                                                <th className="px-6 py-4 min-w-[250px]">상품 정보</th>
+                                                <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('createdAt')}>
+                                                    <div className="flex items-center justify-center gap-1">등록일시 {sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                <th className="px-4 py-4 text-center cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('updatedAt')}>
+                                                    <div className="flex items-center justify-center gap-1">수정일시 {sortConfig.key === 'updatedAt' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('cny')}>
+                                                    <div className="flex items-center justify-end gap-1">위안가 {sortConfig.key === 'cny' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('cost')}>
+                                                    <div className="flex items-center justify-end gap-1">도착가 {sortConfig.key === 'cost' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('price')}>
+                                                    <div className="flex items-center justify-end gap-1">판매가 {sortConfig.key === 'price' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                <th className="px-4 py-4 text-right cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => handleSort('margin')}>
+                                                    <div className="flex items-center justify-end gap-1">마진(수익) {sortConfig.key === 'margin' ? (sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>) : <ChevronsUpDown className="w-3 h-3 opacity-30"/>}</div>
+                                                </th>
+                                                
+                                                {/* 팀원 체크란을 맨 끝으로 이동 */}
+                                                {(settings.teamMembers || []).map(m => <th key={m.key} className="px-3 py-4 text-center w-16 bg-gray-50">{m.label}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {filteredProducts.map((item, idx) => (
+                                                <tr key={item.firebaseId} className={`hover:bg-gray-50/50 transition-colors ${item.isFinalized ? 'bg-indigo-50/40' : item.isConfirmed ? 'bg-green-50/30' : item.isHeld ? 'bg-amber-50/30' : ''} ${selectedItems.includes(item.firebaseId) ? 'bg-blue-50/30' : ''}`}>
+                                                    {userRole === 'admin' && (
+                                                        <td className="px-4 py-4 text-center align-middle">
+                                                            <input type="checkbox" checked={selectedItems.includes(item.firebaseId)} onChange={() => handleSelectItem(item.firebaseId)} className="w-4 h-4 accent-indigo-600 cursor-pointer"/>
+                                                        </td>
                                                     )}
-                                                </td>
-                                                <td className="px-2 py-4 text-center">
-                                                    {userRole === 'admin' && sortConfig.key === 'customOrder' && sortConfig.direction === 'asc' ? (
-                                                        <div className="flex flex-col items-center justify-center gap-1">
-                                                            <button onClick={() => handleMoveOrder(idx, 'up')} disabled={idx === 0} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border"><ChevronUp className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleMoveOrder(idx, 'down')} disabled={idx === filteredProducts.length - 1} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border"><ChevronDown className="w-4 h-4" /></button>
-                                                        </div>
-                                                    ) : <span className="text-[10px] text-gray-300">-</span>}
-                                                </td>
-                                                <td className="px-2 py-4">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border cursor-pointer relative group shadow-inner flex-shrink-0" onClick={() => handleOpenPreview(item, 0)} title="대표 이미지">
-                                                            {item.image ? <img src={item.image} className="absolute inset-0 w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-gray-200"/>}
-                                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10"><ZoomIn className="text-white w-6 h-6"/></div>
-                                                        </div>
-                                                        {item.optionImage && (
-                                                            <div className="w-20 h-20 bg-amber-50 rounded-lg flex items-center justify-center overflow-hidden border border-amber-200 cursor-pointer relative group shadow-inner flex-shrink-0" onClick={() => handleOpenPreview(item, 1)} title="옵션 이미지">
-                                                                <img src={item.optionImage} className="absolute inset-0 w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10"><ZoomIn className="text-white w-6 h-6"/></div>
-                                                                <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center font-black py-1 z-10">옵션</div>
+                                                    <td className="px-2 py-4 text-center font-black align-middle">
+                                                        {editingNoId === item.firebaseId ? (
+                                                            <input type="number" value={editingNoValue} onChange={(e) => setEditingNoValue(e.target.value)} onBlur={() => submitNewNo(item, idx)} onKeyDown={(e) => { if (e.key === 'Enter') submitNewNo(item, idx); else if (e.key === 'Escape') setEditingNoId(null); }} className="w-12 text-center border-2 border-indigo-400 rounded outline-none text-indigo-700 py-1" autoFocus />
+                                                        ) : (
+                                                            <div onClick={() => { if (userRole === 'admin') startEditingNo(item, idx + 1); else showToast("팀원은 순서를 변경할 수 없습니다.", "error"); }} className={`inline-block px-2 py-1.5 rounded font-mono text-sm transition-all ${userRole === 'admin' && sortConfig.key === 'customOrder' ? 'cursor-pointer text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:scale-110 border border-indigo-100 shadow-sm' : 'text-gray-400'}`} title="숫자를 클릭하여 원하는 순서로 즉시 이동">
+                                                                {idx + 1}
                                                             </div>
                                                         )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 min-w-[200px]">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <span className="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-100">{item.project}</span>
-                                                            <span className="text-[9px] text-gray-400">{item.mappedMainCategory} &gt; {item.mappedSubCategory}</span>
-                                                        </div>
-                                                        <div className="text-gray-900 line-clamp-1 flex items-center gap-2 text-base">
-                                                            <span className="text-[9px] text-gray-400 font-mono border border-gray-200 px-1 rounded bg-gray-50">#{item.itemCode || item.firebaseId.slice(-6).toUpperCase()}</span>
-                                                            {item.name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-400 italic line-clamp-1 mt-1">{item.option || '옵션없음'}</div>
-                                                        <div className="flex gap-1.5 mt-2">
-                                                            {(item.links || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-orange-50 text-orange-600 text-[9px] px-1.5 py-0.5 rounded border border-orange-100">소싱 #{i+1}</a>)}
-                                                            {(item.naverLinks || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-green-50 text-green-600 text-[9px] px-1.5 py-0.5 rounded border border-green-100">경쟁 #{i+1}</a>)}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 text-center">
-                                                    {(() => {
-                                                        const dt = formatDateTime(item.createdAt || item.id);
-                                                        return <div className="flex flex-col items-center justify-center gap-1"><span className="text-[15px] text-gray-800 tracking-wider">{dt.date}</span><span className="text-xs text-gray-500 font-mono">{dt.time}</span></div>;
-                                                    })()}
-                                                </td>
-                                                <td className="px-4 py-4 text-center">
-                                                    {(() => {
-                                                        const dt = formatDateTime(item.updatedAt || item.createdAt || item.id);
-                                                        return <div className="flex flex-col items-center justify-center gap-1"><span className="text-[15px] text-gray-800 tracking-wider">{dt.date}</span><span className="text-xs text-gray-500 font-mono">{dt.time}</span></div>;
-                                                    })()}
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="text-orange-600 font-mono text-base">{item.cny || 0} ¥</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="text-gray-600 font-mono text-base">{item.cost?.toLocaleString()}원</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="text-indigo-600 font-mono text-lg">{item.price?.toLocaleString()}원</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="font-mono text-gray-800 text-base">{(item.price - item.cost)?.toLocaleString()}원</div>
-                                                    <div className="text-[11px] text-gray-400 font-mono mt-1">({item.price ? (((item.price - item.cost) / item.price) * 100).toFixed(1) : 0}%)</div>
-                                                </td>
-                                                {(settings.teamMembers || []).map(m => (
-                                                    <td key={m.key} className="px-3 py-4 text-center">
-                                                        <StatusButton status={item.approvals?.[m.key] || 'pending'} onClick={() => { if (userRole === 'admin' || userKey === m.key) toggleStatus(item, m.key); else showToast("본인 이름의 항목만 체크할 수 있습니다.", "error"); }} />
                                                     </td>
-                                                ))}
-                                                
-                                                <td className="px-4 py-4 w-72 min-w-[280px] align-top bg-gray-50/30">
-                                                    <InlineComments 
-                                                        productId={item.firebaseId}
-                                                        comments={commentsByProduct[item.firebaseId] || []}
-                                                        userKey={userKey}
-                                                        userRole={userRole}
-                                                        teamMembers={settings.teamMembers}
-                                                        firebaseSDK={firebaseSDK}
-                                                        appId={appId}
-                                                    />
-                                                </td>
-
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-wrap gap-1.5 justify-center">
-                                                        {userRole === 'admin' ? (
-                                                            <>
-                                                                <button onClick={() => toggleConfirm(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="확정"><CheckCircle className="w-3.5 h-3.5"/> 확정</button>
-                                                                <button onClick={() => toggleHold(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isHeld ? 'bg-amber-50/30 text-amber-500 border border-amber-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="보류"><Clock className="w-3.5 h-3.5"/> 보류</button>
-                                                                <button onClick={() => toggleSample(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isSampleRequested ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="샘플신청"><Truck className="w-3.5 h-3.5"/> 샘플</button>
-                                                                <button onClick={() => { setEditingItem(item); setProductForm({ ...item, links: item.links || [''], naverLinks: item.naverLinks || [''] }); setIsAddModalOpen(true); }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="수정"><Edit2 className="w-3.5 h-3.5"/> 수정</button>
-                                                                <button onClick={async () => { if(confirm('삭제하시겠습니까?')) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: true, updatedAt: Date.now() }); showToast("휴지통으로 이동되었습니다."); } }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="삭제"><Trash2 className="w-3.5 h-3.5"/> 삭제</button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                {item.isConfirmed && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-green-100 text-green-700 border border-green-200"><CheckCircle className="w-3.5 h-3.5"/> 확정</span>}
-                                                                {item.isHeld && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-amber-100 text-amber-700 border border-amber-200"><Clock className="w-3.5 h-3.5"/> 보류</span>}
-                                                                {isConfirmedOnlyView ? (
+                                                    <td className="px-2 py-4 text-center align-middle">
+                                                        {userRole === 'admin' && sortConfig.key === 'customOrder' && sortConfig.direction === 'asc' ? (
+                                                            <div className="flex flex-col items-center justify-center gap-1">
+                                                                <button onClick={() => handleMoveOrder(idx, 'up')} disabled={idx === 0} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border"><ChevronUp className="w-4 h-4" /></button>
+                                                                <button onClick={() => handleMoveOrder(idx, 'down')} disabled={idx === filteredProducts.length - 1} className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-md hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-20 transition-all shadow-sm border"><ChevronDown className="w-4 h-4" /></button>
+                                                            </div>
+                                                        ) : <span className="text-[10px] text-gray-300">-</span>}
+                                                    </td>
+                                                    
+                                                    {/* 이동된 관리/상태 영역 */}
+                                                    <td className="px-6 py-4 align-middle">
+                                                        <div className="flex flex-wrap gap-1.5 justify-center">
+                                                            {/* 버튼 순서 완벽 정렬: 확정 -> 선택 -> 샘플 -> 진행중 -> 보류 */}
+                                                            {userRole === 'admin' ? (
+                                                                <>
+                                                                    <button onClick={() => toggleFinalize(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isFinalized ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="확정"><Flag className="w-3.5 h-3.5"/> 확정</button>
+                                                                    <button onClick={() => toggleConfirm(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isConfirmed ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="선택"><CheckCircle className="w-3.5 h-3.5"/> 선택</button>
                                                                     <button onClick={() => toggleSample(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isSampleRequested ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="샘플신청"><Truck className="w-3.5 h-3.5"/> 샘플</button>
-                                                                ) : (
-                                                                    item.isSampleRequested && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-blue-100 text-blue-700 border border-blue-200"><Truck className="w-3.5 h-3.5"/> 샘플</span>
-                                                                )}
-                                                                {!item.isConfirmed && !item.isHeld && !item.isSampleRequested && <span className="text-xs text-gray-400">진행중</span>}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                                                    <button onClick={() => toggleHold(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isHeld ? 'bg-amber-50/30 text-amber-500 border border-amber-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="보류"><Clock className="w-3.5 h-3.5"/> 보류</button>
+                                                                    <button onClick={() => { setEditingItem(item); setProductForm({ ...item, links: item.links || [''], naverLinks: item.naverLinks || [''] }); setIsAddModalOpen(true); }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="수정"><Edit2 className="w-3.5 h-3.5"/> 수정</button>
+                                                                    <button onClick={async () => { if(confirm('삭제하시겠습니까?')) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', item.firebaseId), { isDeleted: true, updatedAt: Date.now() }); showToast("휴지통으로 이동되었습니다."); } }} className="px-2.5 py-1.5 flex items-center gap-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="삭제"><Trash2 className="w-3.5 h-3.5"/> 삭제</button>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {item.isFinalized && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200"><Flag className="w-3.5 h-3.5"/> 확정</span>}
+                                                                    {item.isConfirmed && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-green-100 text-green-700 border border-green-200"><CheckCircle className="w-3.5 h-3.5"/> 선택</span>}
+                                                                    <button onClick={() => toggleSample(item)} className={`px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg transition-all ${item.isSampleRequested ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title="샘플신청"><Truck className="w-3.5 h-3.5"/> 샘플</button>
+                                                                    
+                                                                    {/* 진행중 뱃지는 확정/선택/보류/샘플 아무것도 아닐 때만 표시 */}
+                                                                    {!item.isConfirmed && !item.isFinalized && !item.isHeld && !item.isSampleRequested && <span className="text-xs text-gray-400 px-2.5 py-1.5">진행중</span>}
+                                                                    
+                                                                    {item.isHeld && <span className="px-2.5 py-1.5 flex items-center gap-1 text-xs rounded-lg bg-amber-100 text-amber-700 border border-amber-200"><Clock className="w-3.5 h-3.5"/> 보류</span>}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-4 py-4 w-72 min-w-[280px] align-middle bg-gray-50/30 border-r border-gray-100">
+                                                        <InlineComments 
+                                                            productId={item.firebaseId}
+                                                            comments={commentsByProduct[item.firebaseId] || []}
+                                                            userKey={userKey}
+                                                            userRole={userRole}
+                                                            teamMembers={settings.teamMembers}
+                                                            firebaseSDK={firebaseSDK}
+                                                            appId={appId}
+                                                        />
+                                                    </td>
+
+                                                    <td className="px-2 py-4 pl-6 align-middle">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border cursor-pointer relative group shadow-inner flex-shrink-0" onClick={() => handleOpenPreview(item, 0)} title="대표 이미지">
+                                                                {item.image ? <img src={item.image} className="absolute inset-0 w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 text-gray-200"/>}
+                                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10"><ZoomIn className="text-white w-6 h-6"/></div>
+                                                            </div>
+                                                            {item.optionImage && (
+                                                                <div className="w-20 h-20 bg-amber-50 rounded-lg flex items-center justify-center overflow-hidden border border-amber-200 cursor-pointer relative group shadow-inner flex-shrink-0" onClick={() => handleOpenPreview(item, 1)} title="옵션 이미지">
+                                                                    <img src={item.optionImage} className="absolute inset-0 w-full h-full object-cover" />
+                                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10"><ZoomIn className="text-white w-6 h-6"/></div>
+                                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center font-black py-1 z-10">옵션</div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 min-w-[200px] align-middle">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <div className="flex items-center gap-1.5 mb-1">
+                                                                <span className="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-100">{item.project}</span>
+                                                                <span className="text-[9px] text-gray-400">{item.mappedMainCategory} &gt; {item.mappedSubCategory}</span>
+                                                            </div>
+                                                            <div className="text-gray-900 line-clamp-1 flex items-center gap-2 text-base">
+                                                                <span className="text-[9px] text-gray-400 font-mono border border-gray-200 px-1 rounded bg-gray-50">#{item.itemCode || item.firebaseId.slice(-6).toUpperCase()}</span>
+                                                                {item.name}
+                                                            </div>
+                                                            <div className="text-xs text-gray-400 italic line-clamp-1 mt-1">{item.option || '옵션없음'}</div>
+                                                            <div className="flex gap-1.5 mt-2">
+                                                                {(item.links || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-orange-50 text-orange-600 text-[9px] px-1.5 py-0.5 rounded border border-orange-100 hover:bg-orange-100 transition-colors">소싱 #{i+1}</a>)}
+                                                                {(item.naverLinks || []).filter(l => l).map((l, i) => <a key={i} href={l} target="_blank" className="bg-green-50 text-green-600 text-[9px] px-1.5 py-0.5 rounded border border-green-100 hover:bg-green-100 transition-colors">경쟁 #{i+1}</a>)}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-center align-middle">
+                                                        {(() => {
+                                                            const dt = formatDateTime(item.createdAt || item.id);
+                                                            return <div className="flex flex-col items-center justify-center gap-1"><span className="text-[15px] text-gray-800 tracking-wider">{dt.date}</span><span className="text-xs text-gray-500 font-mono">{dt.time}</span></div>;
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-4 py-4 text-center align-middle">
+                                                        {(() => {
+                                                            const dt = formatDateTime(item.updatedAt || item.createdAt || item.id);
+                                                            return <div className="flex flex-col items-center justify-center gap-1"><span className="text-[15px] text-gray-800 tracking-wider">{dt.date}</span><span className="text-xs text-gray-500 font-mono">{dt.time}</span></div>;
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-4 py-4 text-right align-middle">
+                                                        <div className="text-orange-600 font-mono text-base">{item.cny || 0} ¥</div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-right align-middle">
+                                                        <div className="text-gray-600 font-mono text-base">{item.cost?.toLocaleString()}원</div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-right align-middle">
+                                                        <div className="text-indigo-600 font-mono text-lg">{item.price?.toLocaleString()}원</div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-right align-middle pr-6">
+                                                        <div className="font-mono text-gray-800 text-base">{(item.price - item.cost)?.toLocaleString()}원</div>
+                                                        <div className="text-[11px] text-gray-400 font-mono mt-1">({item.price ? (((item.price - item.cost) / item.price) * 100).toFixed(1) : 0}%)</div>
+                                                    </td>
+
+                                                    {/* 팀원 체크란을 맨 끝으로 이동 */}
+                                                    {(settings.teamMembers || []).map((m, i) => (
+                                                        <td key={m.key} className={`px-3 py-4 text-center align-middle bg-gray-50/50 ${i === 0 ? 'border-l border-gray-100' : ''}`}>
+                                                            <StatusButton status={item.approvals?.[m.key] || 'pending'} onClick={() => { if (userRole === 'admin' || userKey === m.key) toggleStatus(item, m.key); else showToast("본인 이름의 항목만 체크할 수 있습니다.", "error"); }} />
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </main>
                     </div>
